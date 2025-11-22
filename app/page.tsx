@@ -18,9 +18,10 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { gpx } from "@tmcw/togeojson";
 import * as GeoJSON from "geojson";
 import * as turf from "@turf/turf";
+import * as THREE from "three";
 import { ThreeCustomLayer } from "./utils/ThreeCustomLayer";
 
-// Workaround for Turf v7 type issues
+// Explicitly access functions to avoid webpack/type issues
 const {
   length,
   bearing,
@@ -28,7 +29,7 @@ const {
   lineString,
   point,
   nearestPointOnLine,
-} = turf as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+} = turf;
 
 // --- Configuration ---
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
@@ -45,6 +46,12 @@ type PhotoMarker = {
   distanceAlongPath: number; // Meters from start
   coordinate: [number, number];
   shown: boolean; // To track if it has been shown in the current run
+};
+
+type Keyframe = {
+  distance: number;
+  position: mapboxgl.MercatorCoordinate;
+  orientation: [number, number, number, number]; // Quaternion x, y, z, w
 };
 
 // --- Helper Functions ---
@@ -119,6 +126,7 @@ export default function Home() {
   const isPausedForPhotoRef = useRef<boolean>(false);
   const pauseStartTimeRef = useRef<number>(0);
   const totalPausedTimeRef = useRef<number>(0);
+  const currentDistanceRef = useRef<number>(0);
 
   const previousSmoothedTargetRef = useRef<LngLatLike | null>(null);
 
@@ -146,6 +154,33 @@ export default function Home() {
   // Photos
   const [photos, setPhotos] = useState<PhotoMarker[]>([]);
   const [activePhoto, setActivePhoto] = useState<PhotoMarker | null>(null);
+
+  // Keyframes
+  const [keyframes, setKeyframes] = useState<Keyframe[]>([]);
+  const [useKeyframes, setUseKeyframes] = useState<boolean>(false);
+
+  const handleCaptureKeyframe = () => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const camera = map.getFreeCameraOptions();
+    if (!camera.position || !camera.orientation) return;
+
+    const newKeyframe: Keyframe = {
+      distance: currentDistanceRef.current,
+      position: camera.position,
+      orientation: camera.orientation as [number, number, number, number],
+    };
+
+    setKeyframes((prev) => {
+      const newFrames = [...prev, newKeyframe];
+      // Sort by distance to ensure correct interpolation order
+      return newFrames.sort((a, b) => a.distance - b.distance);
+    });
+
+    // Visual feedback could be added here
+    console.log("Keyframe captured at distance:", currentDistanceRef.current);
+  };
 
   const updateCamera = useCallback(
     (position: LngLatLike, altitude: number, target: LngLatLike) => {
@@ -441,6 +476,8 @@ export default function Home() {
       } catch { }
 
       const distanceAlongPath = totalPathDistance * animationPhase;
+      currentDistanceRef.current = distanceAlongPath;
+
       const exactTargetFeature = along(gpxFeature, distanceAlongPath, {
         units: "meters",
       });
@@ -470,6 +507,7 @@ export default function Home() {
         return;
       }
 
+      // --- Common Logic (Character & Camera Target) ---
       if (previousSmoothedTargetRef.current === null) {
         previousSmoothedTargetRef.current = exactTargetCoords;
       }
@@ -482,19 +520,77 @@ export default function Home() {
 
       const targetElevation =
         map.queryTerrainElevation(smoothedTargetCoords) ?? 0;
-      const cameraAltitude = targetElevation + CAMERA_ALTITUDE_ABOVE_TERRAIN;
 
-      const currentBearing =
-        startBearing - animationPhase * CAMERA_ROTATION_DEGREES;
+      // --- Camera Logic ---
+      if (useKeyframes && keyframes.length > 1) {
+        // 1. Find surrounding keyframes
+        // We need the last keyframe <= currentDistance and the first keyframe > currentDistance
+        let prevKeyframe = keyframes[0];
+        let nextKeyframe = keyframes[keyframes.length - 1];
 
-      const cameraLngLat = computeCameraPosition(
-        CAMERA_PITCH,
-        currentBearing,
-        smoothedTargetCoords,
-        CAMERA_ALTITUDE_ABOVE_TERRAIN
-      );
+        for (let i = 0; i < keyframes.length - 1; i++) {
+          if (keyframes[i].distance <= distanceAlongPath && keyframes[i + 1].distance > distanceAlongPath) {
+            prevKeyframe = keyframes[i];
+            nextKeyframe = keyframes[i + 1];
+            break;
+          }
+        }
 
-      updateCamera(cameraLngLat, cameraAltitude, smoothedTargetCoords);
+        // Handle edge cases (before first or after last)
+        if (distanceAlongPath < keyframes[0].distance) {
+          nextKeyframe = keyframes[0];
+          prevKeyframe = keyframes[0];
+        }
+        if (distanceAlongPath > keyframes[keyframes.length - 1].distance) {
+          prevKeyframe = keyframes[keyframes.length - 1];
+          nextKeyframe = keyframes[keyframes.length - 1];
+        }
+
+        // 2. Interpolate
+        let t = 0;
+        const distDiff = nextKeyframe.distance - prevKeyframe.distance;
+        if (distDiff > 0) {
+          t = (distanceAlongPath - prevKeyframe.distance) / distDiff;
+        }
+
+        // Clamp t
+        t = Math.max(0, Math.min(1, t));
+
+        // Interpolate Position (Linear)
+        const posA = prevKeyframe.position;
+        const posB = nextKeyframe.position;
+        const x = lerp(posA.x, posB.x, t);
+        const y = lerp(posA.y, posB.y, t);
+        const z = lerp(posA.z, posB.z, t);
+
+        const newPos = new MercatorCoordinate(x, y, z);
+
+        // Interpolate Orientation (Slerp)
+        const qA = new THREE.Quaternion(...prevKeyframe.orientation);
+        const qB = new THREE.Quaternion(...nextKeyframe.orientation);
+        qA.slerp(qB, t);
+
+        const newCamera = map.getFreeCameraOptions();
+        newCamera.position = newPos;
+        newCamera.orientation = [qA.x, qA.y, qA.z, qA.w];
+        map.setFreeCameraOptions(newCamera);
+
+      } else {
+        // Default "Eagle View" Logic
+        const cameraAltitude = targetElevation + CAMERA_ALTITUDE_ABOVE_TERRAIN;
+
+        const currentBearing =
+          startBearing - animationPhase * CAMERA_ROTATION_DEGREES;
+
+        const cameraLngLat = computeCameraPosition(
+          CAMERA_PITCH,
+          currentBearing,
+          smoothedTargetCoords,
+          CAMERA_ALTITUDE_ABOVE_TERRAIN
+        );
+
+        updateCamera(cameraLngLat, cameraAltitude, smoothedTargetCoords);
+      }
 
       // Update 3D Character
       if (threeLayerRef.current) {
@@ -539,6 +635,8 @@ export default function Home() {
       isTerrainReady,
       updateCamera,
       photos, // Dependency on photos to trigger them
+      keyframes,
+      useKeyframes,
     ]
   );
 
@@ -733,109 +831,237 @@ export default function Home() {
         <title>Visor GPX 3D</title>
       </Head>
 
-      {/* Controls */}
+      {/* Modern Dark UI Controls */}
       <div
         style={{
-          padding: "15px",
-          borderBottom: "1px solid #ccc",
-          background: "rgba(255, 255, 255, 0.9)",
+          position: "absolute",
+          top: "20px",
+          left: "20px",
+          width: "320px",
+          background: "rgba(20, 20, 20, 0.95)",
           backdropFilter: "blur(10px)",
-          flexShrink: 0,
+          borderRadius: "12px",
+          padding: "20px",
+          color: "#ffffff",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
           zIndex: 10,
-          boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          fontFamily: "'Inter', sans-serif",
         }}
       >
-        <h2 style={{ margin: "0 0 15px 0", fontSize: "1.2rem" }}>
-          Visor GPX 3D
+        <h2
+          style={{
+            margin: "0 0 20px 0",
+            fontSize: "1.5rem",
+            fontWeight: "700",
+            background: "linear-gradient(45deg, #0070f3, #00c6ff)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}
+        >
+          FlyBy 3D
         </h2>
 
-        <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-          <div>
+        {/* Status Bar */}
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "10px",
+            background: "rgba(255, 255, 255, 0.05)",
+            borderRadius: "8px",
+            fontSize: "0.85rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <div
+            style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              background: error
+                ? "#ff4444"
+                : isAnimating
+                  ? "#00c6ff"
+                  : "#00ff88",
+              boxShadow: error
+                ? "0 0 8px #ff4444"
+                : isAnimating
+                  ? "0 0 8px #00c6ff"
+                  : "0 0 8px #00ff88",
+            }}
+          />
+          <span style={{ opacity: 0.9 }}>
+            {error || statusMessage || "Listo para iniciar"}
+          </span>
+        </div>
+
+        {/* File Inputs */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+          <div style={{ position: "relative" }}>
             <label
               style={{
                 display: "block",
-                marginBottom: "5px",
-                fontSize: "0.8rem",
-                fontWeight: "bold",
+                marginBottom: "8px",
+                fontSize: "0.75rem",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                color: "#888",
+                fontWeight: "600",
               }}
             >
-              1. Cargar Ruta (GPX)
+              Ruta GPX
             </label>
             <input
               type="file"
               accept=".gpx"
               onChange={handleFileChange}
               disabled={isLoading || isAnimating}
+              style={{
+                width: "100%",
+                padding: "8px",
+                background: "rgba(0,0,0,0.2)",
+                border: "1px solid #333",
+                borderRadius: "6px",
+                color: "#fff",
+                fontSize: "0.9rem",
+              }}
             />
           </div>
 
-          <div>
+          <div style={{ position: "relative" }}>
             <label
               style={{
                 display: "block",
-                marginBottom: "5px",
-                fontSize: "0.8rem",
-                fontWeight: "bold",
+                marginBottom: "8px",
+                fontSize: "0.75rem",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                color: "#888",
+                fontWeight: "600",
               }}
             >
-              2. Añadir Fotos (Opcional)
+              Añadir Foto
             </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleAddPhoto}
-              disabled={!gpxFeature || isAnimating}
-            />
-            <div style={{ fontSize: "0.7rem", color: "#666", marginTop: "2px" }}>
-              Se añade en el centro actual del mapa.
+            <div style={{ display: "flex", gap: "10px" }}>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAddPhoto}
+                disabled={!gpxFeature || isAnimating}
+                style={{
+                  flex: 1,
+                  padding: "8px",
+                  background: "rgba(0,0,0,0.2)",
+                  border: "1px solid #333",
+                  borderRadius: "6px",
+                  color: "#fff",
+                  fontSize: "0.9rem",
+                }}
+              />
             </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              alignItems: "center",
-              marginTop: "auto",
-            }}
-          >
-            <button
-              onClick={handleToggleAnimation}
-              disabled={!gpxFeature || !isTerrainReady || isLoading}
+            <div
               style={{
-                padding: "8px 16px",
-                background: isAnimating ? "#ff4444" : "#0070f3",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "bold",
+                fontSize: "0.7rem",
+                color: "#666",
+                marginTop: "4px",
+                fontStyle: "italic",
               }}
             >
-              {isAnimating ? "Pausar" : "Iniciar Recorrido"}
-            </button>
-            <button
-              onClick={handleResetAnimation}
-              disabled={!gpxFeature || isLoading}
-              style={{
-                padding: "8px 16px",
-                background: "#eee",
-                color: "#333",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Reiniciar
-            </button>
+              Se añade en la ubicación actual de la cámara
+            </div>
           </div>
         </div>
 
-        <div style={{ marginTop: "10px", fontSize: "0.9rem" }}>
-          {error && <span style={{ color: "red" }}>{error}</span>}
-          {!error && statusMessage && (
-            <span style={{ color: "green" }}>{statusMessage}</span>
-          )}
+        {/* Playback Controls */}
+        <div
+          style={{
+            marginTop: "25px",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "10px",
+          }}
+        >
+          <button
+            onClick={handleToggleAnimation}
+            disabled={!gpxFeature || !isTerrainReady || isLoading}
+            style={{
+              padding: "12px",
+              background: isAnimating
+                ? "rgba(255, 68, 68, 0.2)"
+                : "linear-gradient(135deg, #0070f3, #00c6ff)",
+              color: isAnimating ? "#ff4444" : "white",
+              border: isAnimating ? "1px solid #ff4444" : "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "0.95rem",
+              transition: "all 0.2s ease",
+              boxShadow: isAnimating ? "none" : "0 4px 12px rgba(0, 112, 243, 0.3)",
+            }}
+          >
+            {isAnimating ? "PAUSAR" : "INICIAR"}
+          </button>
+
+          <button
+            onClick={handleResetAnimation}
+            disabled={!gpxFeature || isLoading}
+            style={{
+              padding: "12px",
+              background: "rgba(255, 255, 255, 0.1)",
+              color: "white",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "0.95rem",
+              transition: "all 0.2s ease",
+            }}
+          >
+            REINICIAR
+          </button>
+        </div>
+
+        {/* Keyframe Controls */}
+        <div
+          style={{
+            marginTop: "20px",
+            paddingTop: "15px",
+            borderTop: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+            <label style={{ fontSize: "0.8rem", color: "#ccc", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
+              <input
+                type="checkbox"
+                checked={useKeyframes}
+                onChange={(e) => setUseKeyframes(e.target.checked)}
+                disabled={keyframes.length < 2}
+              />
+              Usar Keyframes ({keyframes.length})
+            </label>
+
+            <button
+              onClick={handleCaptureKeyframe}
+              disabled={isAnimating || !gpxFeature}
+              style={{
+                padding: "6px 12px",
+                background: "rgba(255, 165, 0, 0.2)",
+                color: "orange",
+                border: "1px solid orange",
+                borderRadius: "6px",
+                fontSize: "0.75rem",
+                cursor: "pointer",
+                fontWeight: "bold",
+              }}
+            >
+              + CAPTURAR VISTA
+            </button>
+          </div>
+          <div style={{ fontSize: "0.7rem", color: "#666", fontStyle: "italic" }}>
+            Pausa, mueve la cámara y captura para crear una ruta personalizada.
+          </div>
         </div>
       </div>
 

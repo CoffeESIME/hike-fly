@@ -45,6 +45,7 @@ type PhotoMarker = {
   distanceAlongPath: number; // Meters from start
   coordinate: [number, number];
   shown: boolean; // To track if it has been shown in the current run
+  enabled: boolean; // To toggle visibility in the UI
 };
 
 type Keyframe = {
@@ -162,6 +163,10 @@ export default function Home() {
   const [hideMenuOnStart, setHideMenuOnStart] = useState<boolean>(false);
   const [isMenuVisible, setIsMenuVisible] = useState<boolean>(true);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  // Slideshow State
+  const [slideshowQueue, setSlideshowQueue] = useState<PhotoMarker[]>([]);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(-1);
 
   const handleCaptureKeyframe = () => {
     const map = mapRef.current;
@@ -490,22 +495,30 @@ export default function Home() {
 
       // Check for Photos
       const PHOTO_TRIGGER_DISTANCE = 20; // meters
-      const photoToShow = photos.find((p) => {
+      const photosToShow = photos.filter((p) => {
         return (
+          p.enabled && // Only show enabled photos
           !p.shown &&
           Math.abs(p.distanceAlongPath - distanceAlongPath) <
           PHOTO_TRIGGER_DISTANCE
         );
       });
 
-      if (photoToShow) {
-        console.log("Showing photo:", photoToShow.id);
+      if (photosToShow.length > 0) {
+        console.log("Starting slideshow with:", photosToShow.length, "photos");
         isPausedForPhotoRef.current = true;
-        setActivePhoto(photoToShow);
-        // Mark as shown so we don't trigger it again immediately
+
+        // Start Slideshow
+        setSlideshowQueue(photosToShow);
+        setCurrentSlideIndex(0);
+        setActivePhoto(photosToShow[0]);
+
+        // Mark ALL as shown so we don't trigger them again
+        const idsToShow = new Set(photosToShow.map(p => p.id));
         setPhotos((prev) =>
-          prev.map((p) => (p.id === photoToShow.id ? { ...p, shown: true } : p))
+          prev.map((p) => (idsToShow.has(p.id) ? { ...p, shown: true } : p))
         );
+
         // Continue loop to handle pause state
         animationFrameRef.current = requestAnimationFrame(animationStep);
         return;
@@ -697,6 +710,28 @@ export default function Home() {
     };
   }, [isAnimating, animationStep, gpxFeature, isTerrainReady, statusMessage]);
 
+  // Slideshow Timer Logic
+  useEffect(() => {
+    if (!activePhoto || slideshowQueue.length === 0) return;
+
+    const timer = setTimeout(() => {
+      const nextIndex = currentSlideIndex + 1;
+      if (nextIndex < slideshowQueue.length) {
+        // Show next photo
+        setCurrentSlideIndex(nextIndex);
+        setActivePhoto(slideshowQueue[nextIndex]);
+      } else {
+        // End of slideshow
+        setActivePhoto(null);
+        setSlideshowQueue([]);
+        setCurrentSlideIndex(-1);
+        isPausedForPhotoRef.current = false;
+      }
+    }, 3000); // 3 seconds per photo
+
+    return () => clearTimeout(timer);
+  }, [activePhoto, slideshowQueue, currentSlideIndex]);
+
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     setError(null);
     setStatusMessage(null);
@@ -813,6 +848,7 @@ export default function Home() {
           coordinate: [lngLat.lng, lngLat.lat],
           distanceAlongPath: 0, // Placeholder, ideally calculated
           shown: false,
+          enabled: true,
         },
       ]);
     }
@@ -1015,6 +1051,39 @@ export default function Home() {
               }}
             />
           </div>
+
+          {/* Photo List */}
+          {photos.length > 0 && (
+            <div style={{ marginTop: "10px", maxHeight: "150px", overflowY: "auto", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "10px" }}>
+              <label style={{ fontSize: "0.75rem", color: "#888", fontWeight: "600", display: "block", marginBottom: "8px" }}>
+                FOTOS ({photos.length})
+              </label>
+              {photos.map((photo) => (
+                <div key={photo.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", background: "rgba(255,255,255,0.05)", padding: "5px", borderRadius: "4px" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo.url} alt="thumb" style={{ width: "30px", height: "30px", objectFit: "cover", borderRadius: "4px" }} />
+                  <div style={{ flex: 1, fontSize: "0.75rem" }}>
+                    <div style={{ color: "#ccc" }}>Km {(photo.distanceAlongPath / 1000).toFixed(2)}</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={photo.enabled}
+                    onChange={(e) => {
+                      setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, enabled: e.target.checked } : p));
+                    }}
+                    title="Habilitar/Deshabilitar"
+                  />
+                  <button
+                    onClick={() => setPhotos(prev => prev.filter(p => p.id !== photo.id))}
+                    style={{ background: "none", border: "none", color: "#ff4444", cursor: "pointer", fontSize: "1rem" }}
+                    title="Eliminar"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Playback Controls */}
@@ -1230,22 +1299,35 @@ export default function Home() {
                   borderRadius: "4px",
                 }}
               />
-              <button
-                onClick={closePhotoOverlay}
-                style={{
-                  marginTop: "15px",
-                  width: "100%",
-                  padding: "10px",
+              <div style={{
+                marginTop: "10px",
+                color: "#333",
+                fontSize: "0.8rem",
+                textAlign: "center",
+                fontWeight: "bold"
+              }}>
+                {slideshowQueue.length > 1 ? `Foto ${currentSlideIndex + 1} de ${slideshowQueue.length}` : "Punto de Control"}
+              </div>
+              <div style={{
+                height: "4px",
+                background: "#eee",
+                borderRadius: "2px",
+                marginTop: "5px",
+                overflow: "hidden"
+              }}>
+                <div style={{
+                  height: "100%",
                   background: "#0070f3",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontSize: "1rem",
-                }}
-              >
-                Continuar Recorrido
-              </button>
+                  width: "0%",
+                  animation: "progress 3s linear forwards"
+                }} />
+              </div>
+              <style jsx>{`
+                @keyframes progress {
+                  from { width: 0%; }
+                  to { width: 100%; }
+                }
+              `}</style>
             </div>
           </div>
         )

@@ -28,7 +28,6 @@ const {
   along,
   lineString,
   point,
-  nearestPointOnLine,
 } = turf;
 
 // --- Configuration ---
@@ -162,6 +161,7 @@ export default function Home() {
   // Menu Visibility
   const [hideMenuOnStart, setHideMenuOnStart] = useState<boolean>(false);
   const [isMenuVisible, setIsMenuVisible] = useState<boolean>(true);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   const handleCaptureKeyframe = () => {
     const map = mapRef.current;
@@ -795,33 +795,34 @@ export default function Home() {
     }
   };
 
-  const handleAddPhoto = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !gpxFeature) return;
+  const handleAddPhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !mapRef.current) return;
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const url = ev.target?.result as string;
-      const map = mapRef.current;
-      if (!map) return;
-      const center = map.getCenter();
-      const centerPt = point([center.lng, center.lat]);
-      const snapped = nearestPointOnLine(gpxFeature, centerPt, { units: 'meters' });
+    const url = URL.createObjectURL(file);
+    const camera = mapRef.current.getFreeCameraOptions();
+    const position = camera.position;
 
-      const snappedMeters = snapped.properties?.location || 0;
+    if (position) {
+      const lngLat = position.toLngLat();
+      setPhotos((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          url,
+          coordinate: [lngLat.lng, lngLat.lat],
+          distanceAlongPath: 0, // Placeholder, ideally calculated
+          shown: false,
+        },
+      ]);
+    }
+  };
 
-      const newPhoto: PhotoMarker = {
-        id: Date.now().toString(),
-        url,
-        distanceAlongPath: snappedMeters,
-        coordinate: snapped.geometry.coordinates as [number, number],
-        shown: false,
-      };
-
-      setPhotos(prev => [...prev, newPhoto]);
-      alert(`Foto añadida en el km ${(snappedMeters / 1000).toFixed(2)} de la ruta.`);
-    };
-    reader.readAsDataURL(file);
+  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setLogoUrl(url);
   };
 
   const closePhotoOverlay = () => {
@@ -985,6 +986,35 @@ export default function Home() {
               Se añade en la ubicación actual de la cámara
             </div>
           </div>
+          <div style={{ position: "relative" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontSize: "0.75rem",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                color: "#888",
+                fontWeight: "600",
+              }}
+            >
+              Logo / Sello
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleLogoUpload}
+              style={{
+                width: "100%",
+                padding: "8px",
+                background: "rgba(0,0,0,0.2)",
+                border: "1px solid #333",
+                borderRadius: "6px",
+                color: "#fff",
+                fontSize: "0.9rem",
+              }}
+            />
+          </div>
         </div>
 
         {/* Playback Controls */}
@@ -1124,6 +1154,36 @@ export default function Home() {
           </button>
         )
       }
+
+      {/* Logo Overlay */}
+      {logoUrl && (
+        <div
+          style={{
+            position: "absolute",
+            top: "20px",
+            right: "20px",
+            width: "80px",
+            height: "80px",
+            borderRadius: "50%",
+            overflow: "hidden",
+            zIndex: 20,
+            border: "2px solid white",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            pointerEvents: "none", // Allow clicking through to map
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={logoUrl}
+            alt="Group Logo"
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
+        </div>
+      )}
 
       {/* Map Container */}
       <div ref={mapContainerRef} style={{ flexGrow: 1, minHeight: 0 }} />

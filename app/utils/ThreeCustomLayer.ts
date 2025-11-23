@@ -25,9 +25,9 @@ export class ThreeCustomLayer implements mapboxgl.CustomLayerInterface {
         this.modelUrl = modelUrl;
 
         // Setup basic lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 6); // Increased intensity
         this.scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 6.0); // Increased intensity
         directionalLight.position.set(0, -70, 100).normalize();
         this.scene.add(directionalLight);
     }
@@ -43,52 +43,56 @@ export class ThreeCustomLayer implements mapboxgl.CustomLayerInterface {
         this.renderer.autoClear = false;
 
         if (this.modelUrl) {
-            const loader = new GLTFLoader();
-            loader.load(
-                this.modelUrl,
-                (gltf) => {
-                    this.model = gltf.scene;
-                    this.scene.add(this.model);
-                    // Initial scale adjustment - can be parameterized later
-                    this.model.scale.set(10, 10, 10);
-                    this.model.rotation.x = Math.PI / 2; // Adjust if needed for Z-up
-                },
-                undefined,
-                (error) => {
-                    console.error("Error loading 3D model:", error);
-                    this.addPlaceholderModel();
-                }
-            );
+            this.addPlaceholderModel();
         } else {
             this.addPlaceholderModel();
         }
     }
 
     addPlaceholderModel() {
-        // Create a simple cone to represent a hiker/person
-        const geometry = new THREE.ConeGeometry(2, 8, 16);
-        const material = new THREE.MeshPhongMaterial({ color: 0xff0000 });
-        this.model = new THREE.Mesh(geometry, material);
+        // ... configuración del loader ...
+        const loader = new GLTFLoader();
 
-        // Rotate to point forward (Y-up in Three.js, but Mapbox is Z-up usually, need to align)
-        // Cone points up (Y). We want it to point "forward" or just stand up.
-        // In Mapbox custom layer:
-        // x is east, y is north, z is up.
-        // Three.js default: Y is up.
-        // So we rotate geometry so Y becomes Z.
-        (this.model as THREE.Mesh).geometry.rotateX(Math.PI / 2);
-        this.model.position.set(0, 0, 0);
+        loader.load('/models/mixtli-model.glb', (gltf) => {
+            this.model = gltf.scene;
 
-        this.scene.add(this.model);
+            // 1. ARREGLAR MATERIALES (Para que se vea sólido)
+            this.model.traverse((object) => {
+                // Verificamos el tipo de clase
+                if (object instanceof THREE.Mesh) {
+                    // Aquí dentro, TypeScript ya sabe que 'object' es un Mesh
+                    // y te dejará acceder a .material sin errores.
+
+                    // A veces el material puede ser un array, así que es bueno castearlo
+                    const material = object.material as THREE.MeshStandardMaterial;
+
+                    material.metalness = 0;
+                    material.roughness = 0.8;
+                }
+            });
+
+            // 2. ARREGLAR ROTACIÓN (Para que no esté de cabeza)
+            // En Mapbox custom layer, a veces hay que rotar X para levantarlo.
+            this.model.rotation.x = -Math.PI / 2;
+
+            // Ajusta la escala si es necesario (Blender suele exportar muy grande)
+            this.model.scale.set(10, 10, 10);
+
+            this.scene.add(this.model);
+        });
+
+        // 3. LUCES (Vital para ver el modelo)
+        const ambient = new THREE.AmbientLight(0xffffff, 2.5);
+        this.scene.add(ambient);
+
+        const sun = new THREE.DirectionalLight(0xffffff, 3.0);
+        sun.position.set(10, 10, 100);
+        this.scene.add(sun);
     }
-
     render(gl: WebGLRenderingContext, matrix: number[]) {
         if (!this.renderer || !this.map) return;
-
-        // Sync Mapbox matrix with Three.js camera
         const m = new THREE.Matrix4().fromArray(matrix);
         this.camera.projectionMatrix = m;
-
         this.renderer.resetState();
         this.renderer.render(this.scene, this.camera);
         this.map.triggerRepaint();
@@ -97,25 +101,20 @@ export class ThreeCustomLayer implements mapboxgl.CustomLayerInterface {
     updatePosition(lng: number, lat: number, altitude: number, bearing: number) {
         if (!this.model) return;
 
+        // Add altitude offset to prevent z-fighting/clipping with terrain
+        const ALTITUDE_OFFSET = 35; // meters
         const modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat(
             [lng, lat],
-            altitude
+            altitude + ALTITUDE_OFFSET
         );
 
-        // Update model position
         this.model.position.set(
             modelAsMercatorCoordinate.x,
             modelAsMercatorCoordinate.y,
             modelAsMercatorCoordinate.z
         );
 
-        // Scale model to maintain size in meters (approx)
-        // 1 unit in Mercator = 1 / metersPerPixelAtLatitude meters? No.
-        // MercatorCoordinate.meterInMercatorCoordinateUnits() gives the scale factor.
         const scale = modelAsMercatorCoordinate.meterInMercatorCoordinateUnits();
-        // We want the model to be roughly 2 meters tall (if it's a person)
-        // If our cone is 8 units tall in local space, we scale it.
-        // Let's say we want it to be 10 meters tall for visibility.
         const targetSizeMeters = 20;
         this.model.scale.set(
             targetSizeMeters * scale,
@@ -123,13 +122,8 @@ export class ThreeCustomLayer implements mapboxgl.CustomLayerInterface {
             targetSizeMeters * scale
         );
 
-        // Rotation
-        // Bearing is in degrees, clockwise from North.
-        // Three.js rotation is usually counter-clockwise in radians.
-        // We need to align the model's "forward" with the bearing.
-        // If our cone points +Y (North in Mapbox frame), bearing 0 is correct.
-        // Bearing 90 (East) -> Rotate -90 degrees (or +270).
+        this.model.rotation.set(0, 0, 0);
+        this.model.rotation.x = Math.PI / 2;
         this.model.rotation.z = -bearing * (Math.PI / 180);
-        this.model.rotation.x = Math.PI / 2; // Keep it standing up
     }
 }

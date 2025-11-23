@@ -159,6 +159,10 @@ export default function Home() {
   const [keyframes, setKeyframes] = useState<Keyframe[]>([]);
   const [useKeyframes, setUseKeyframes] = useState<boolean>(false);
 
+  // Menu Visibility
+  const [hideMenuOnStart, setHideMenuOnStart] = useState<boolean>(false);
+  const [isMenuVisible, setIsMenuVisible] = useState<boolean>(true);
+
   const handleCaptureKeyframe = () => {
     const map = mapRef.current;
     if (!map) return;
@@ -625,6 +629,7 @@ export default function Home() {
         setIsAnimating(false);
         setStatusMessage("Animación completada.");
         toggleMapInteractivity(map, true);
+        setIsMenuVisible(true);
       }
     },
     [
@@ -745,7 +750,14 @@ export default function Home() {
       return;
     }
     setError(null);
-    setIsAnimating((prev) => !prev);
+
+    setIsAnimating((prev) => {
+      const nextState = !prev;
+      if (nextState && hideMenuOnStart) {
+        setIsMenuVisible(false);
+      }
+      return nextState;
+    });
   };
 
   const handleResetAnimation = () => {
@@ -834,6 +846,7 @@ export default function Home() {
       {/* Modern Dark UI Controls */}
       <div
         style={{
+          display: isMenuVisible ? "block" : "none",
           position: "absolute",
           top: "20px",
           left: "20px",
@@ -1062,72 +1075,121 @@ export default function Home() {
           <div style={{ fontSize: "0.7rem", color: "#666", fontStyle: "italic" }}>
             Pausa, mueve la cámara y captura para crear una ruta personalizada.
           </div>
+          {/* Hide Menu Option */}
+          <div
+            style={{
+              marginTop: "15px",
+              paddingTop: "15px",
+              borderTop: "1px solid rgba(255,255,255,0.1)",
+            }}
+          >
+            <label style={{ fontSize: "0.8rem", color: "#ccc", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
+              <input
+                type="checkbox"
+                checked={hideMenuOnStart}
+                onChange={(e) => setHideMenuOnStart(e.target.checked)}
+              />
+              Ocultar menú al iniciar
+            </label>
+          </div>
         </div>
       </div>
+
+      {/* Restore Menu Button (Visible when menu is hidden) */}
+      {
+        !isMenuVisible && (
+          <button
+            onClick={() => setIsMenuVisible(true)}
+            style={{
+              position: "absolute",
+              top: "20px",
+              left: "20px",
+              padding: "10px 15px",
+              background: "rgba(20, 20, 20, 0.8)",
+              backdropFilter: "blur(5px)",
+              color: "white",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              borderRadius: "8px",
+              cursor: "pointer",
+              zIndex: 10,
+              fontWeight: "600",
+              fontSize: "0.9rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+            }}
+          >
+            <span style={{ fontSize: "1.2rem" }}>☰</span> MOSTRAR MENÚ
+          </button>
+        )
+      }
 
       {/* Map Container */}
       <div ref={mapContainerRef} style={{ flexGrow: 1, minHeight: 0 }} />
 
       {/* Photo Overlay */}
-      {activePhoto && (
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            background: "rgba(0,0,0,0.8)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 20,
-            animation: "fadeIn 0.3s ease",
-          }}
-          onClick={closePhotoOverlay}
-        >
+      {
+        activePhoto && (
           <div
             style={{
-              maxWidth: "90%",
-              maxHeight: "80%",
-              background: "white",
-              padding: "10px",
-              borderRadius: "8px",
-              position: "relative",
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              background: "rgba(0,0,0,0.8)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 20,
+              animation: "fadeIn 0.3s ease",
             }}
-            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking image
+            onClick={closePhotoOverlay}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={activePhoto.url}
-              alt="Route Point"
+            <div
               style={{
-                maxWidth: "100%",
-                maxHeight: "70vh",
-                display: "block",
-                borderRadius: "4px",
-              }}
-            />
-            <button
-              onClick={closePhotoOverlay}
-              style={{
-                marginTop: "15px",
-                width: "100%",
+                maxWidth: "90%",
+                maxHeight: "80%",
+                background: "white",
                 padding: "10px",
-                background: "#0070f3",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontSize: "1rem",
+                borderRadius: "8px",
+                position: "relative",
               }}
+              onClick={(e) => e.stopPropagation()} // Prevent closing when clicking image
             >
-              Continuar Recorrido
-            </button>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={activePhoto.url}
+                alt="Route Point"
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "70vh",
+                  display: "block",
+                  borderRadius: "4px",
+                }}
+              />
+              <button
+                onClick={closePhotoOverlay}
+                style={{
+                  marginTop: "15px",
+                  width: "100%",
+                  padding: "10px",
+                  background: "#0070f3",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontSize: "1rem",
+                }}
+              >
+                Continuar Recorrido
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
     </div>
   );
 }

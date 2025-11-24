@@ -28,6 +28,7 @@ const {
   along,
   lineString,
   point,
+  distance,
 } = turf;
 
 // --- Configuration ---
@@ -167,6 +168,53 @@ export default function Home() {
   // Slideshow State
   const [slideshowQueue, setSlideshowQueue] = useState<PhotoMarker[]>([]);
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(-1);
+
+  // Stats Refs
+  const totalElevationGainRef = useRef<number>(0);
+  const statsWidgetRef = useRef<HTMLDivElement>(null);
+  const elevationProfileRef = useRef<{ dist: number; ele: number }[]>([]);
+
+  const calculateElevationGain = (geojson: GeoJSON.Feature<GeoJSON.LineString>) => {
+    let gain = 0;
+    const coords = geojson.geometry.coordinates;
+    for (let i = 1; i < coords.length; i++) {
+      const diff = coords[i][2] - coords[i - 1][2];
+      if (diff > 0) gain += diff;
+    }
+    return gain;
+  };
+
+  const getElevationAtDistance = (targetDist: number) => {
+    const profile = elevationProfileRef.current;
+    if (profile.length === 0) return 0;
+    if (targetDist <= 0) return profile[0].ele;
+    if (targetDist >= profile[profile.length - 1].dist) return profile[profile.length - 1].ele;
+
+    // Binary search or linear search (linear is fine for animation if we track index, but binary is safer/easier to implement stateless)
+    // Optimization: Since we move forward, we could cache index, but let's stick to simple binary search for now or just find.
+    // Given the number of points might be large, binary search is better.
+
+    let low = 0, high = profile.length - 1;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      if (profile[mid].dist < targetDist) {
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    // 'low' is the index of the first element > targetDist
+    // So we interpolate between low-1 and low
+    const p2 = profile[low];
+    const p1 = profile[low - 1];
+
+    if (!p1) return p2.ele; // Should not happen if check bounds
+    if (!p2) return p1.ele;
+
+    const t = (targetDist - p1.dist) / (p2.dist - p1.dist);
+    return p1.ele + (p2.ele - p1.ele) * t;
+  };
 
   const handleCaptureKeyframe = () => {
     const map = mapRef.current;
@@ -538,6 +586,26 @@ export default function Home() {
       const targetElevation =
         map.queryTerrainElevation(smoothedTargetCoords) ?? 0;
 
+      // Update Stats Widget
+      if (statsWidgetRef.current) {
+        statsWidgetRef.current.innerHTML = `
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <div style="font-size: 0.7rem; color: #aaa; text-transform: uppercase; letter-spacing: 1px;">Distancia</div>
+            <div style="font-size: 1.2rem; font-weight: 700; color: white;">
+              ${(distanceAlongPath / 1000).toFixed(2)} <span style="font-size: 0.8rem; color: #888;">/ ${(totalPathDistance / 1000).toFixed(2)} km</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+             <div style="font-size: 0.7rem; color: #aaa; text-transform: uppercase; letter-spacing: 1px;">Altitud</div>
+             <div style="font-size: 1.2rem; font-weight: 700; color: white;">${getElevationAtDistance(distanceAlongPath).toFixed(0)} <span style="font-size: 0.8rem; color: #888;">m</span></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+             <div style="font-size: 0.7rem; color: #aaa; text-transform: uppercase; letter-spacing: 1px;">Desnivel +</div>
+             <div style="font-size: 1.2rem; font-weight: 700; color: white;">${totalElevationGainRef.current.toFixed(0)} <span style="font-size: 0.8rem; color: #888;">m</span></div>
+          </div>
+        `;
+      }
+
       // --- Camera Logic ---
       if (useKeyframes && keyframes.length > 1) {
         // 1. Find surrounding keyframes
@@ -760,6 +828,28 @@ export default function Home() {
         const doc = parser.parseFromString(gpxContent, "application/xml");
         const geojsonData = gpx(doc);
         setGpxData(geojsonData);
+
+        // Calculate stats & Build Elevation Profile
+        if (geojsonData.features && geojsonData.features.length > 0) {
+          const feature = geojsonData.features[0] as GeoJSON.Feature<GeoJSON.LineString>;
+          totalElevationGainRef.current = calculateElevationGain(feature);
+
+          // Build Profile
+          const coords = feature.geometry.coordinates;
+          const profile: { dist: number; ele: number }[] = [];
+          let dist = 0;
+          profile.push({ dist: 0, ele: coords[0][2] || 0 });
+
+          for (let i = 1; i < coords.length; i++) {
+            const from = point(coords[i - 1]);
+            const to = point(coords[i]);
+            const d = distance(from, to, { units: "meters" });
+            dist += d;
+            profile.push({ dist: dist, ele: coords[i][2] || 0 });
+          }
+          elevationProfileRef.current = profile;
+        }
+
         setStatusMessage("Archivo GPX leído. Procesando...");
       } catch (err) {
         console.error("Error leyendo archivo GPX:", err);
@@ -1252,6 +1342,30 @@ export default function Home() {
             }}
           />
         </div>
+      )}
+
+      {/* Stats Widget */}
+      {gpxFeature && (
+        <div
+          ref={statsWidgetRef}
+          style={{
+            position: "absolute",
+            bottom: "30px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            display: "flex",
+            gap: "30px",
+            background: "rgba(20, 20, 20, 0.85)",
+            backdropFilter: "blur(8px)",
+            padding: "15px 30px",
+            borderRadius: "16px",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
+            zIndex: 10,
+            pointerEvents: "none", // Let clicks pass through
+            fontFamily: "'Inter', sans-serif",
+          }}
+        />
       )}
 
       {/* Map Container */}

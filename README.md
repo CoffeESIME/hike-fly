@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 # 🚀 FlyBy Hiking
 
@@ -264,4 +264,3 @@ Este proyecto está bajo la Licencia MIT. Ver [LICENSE](LICENSE) para más detal
 [⬆ Volver arriba](#-flyby-hiking)
 
 </div>
-]]>

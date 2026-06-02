@@ -34,7 +34,8 @@ const {
 // --- Configuration ---
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 const CAMERA_PITCH = 60;
-const CAMERA_ALTITUDE_ABOVE_TERRAIN = 500;
+const CAMERA_ALTITUDE_ABOVE_TERRAIN = 500;  // meters above terrain
+const TERRAIN_EXAGGERATION = 2.5;            // higher = more dramatic terrain relief
 const ANIMATION_DURATION_SECONDS = 60;
 const CAMERA_ROTATION_DEGREES = 180;
 const LERP_SMOOTHING_FACTOR = 0.1;
@@ -128,6 +129,12 @@ export default function Home() {
   const pauseStartTimeRef = useRef<number>(0);
   const totalPausedTimeRef = useRef<number>(0);
   const currentDistanceRef = useRef<number>(0);
+
+  // Manual pause: tracks wall-clock time when user paused, so resume is seamless
+  const manualPauseWallTimeRef = useRef<number>(0);
+
+  // Bearing smoothing: prevents model wobble on tight trail curves
+  const smoothedBearingRef = useRef<number | null>(null);
 
   const previousSmoothedTargetRef = useRef<LngLatLike | null>(null);
 
@@ -284,7 +291,7 @@ export default function Home() {
           });
         }
         if (!map.getTerrain()) {
-          map.setTerrain({ source: "mapbox-dem", exaggeration: 1.5 });
+          map.setTerrain({ source: "mapbox-dem", exaggeration: TERRAIN_EXAGGERATION });
         }
 
         // Add 3D Character Layer
@@ -292,16 +299,27 @@ export default function Home() {
         map.addLayer(customLayer);
         threeLayerRef.current = customLayer;
 
+        let terrainCheckAttempts = 0;
+        const MAX_TERRAIN_ATTEMPTS = 15; // 15 seconds max
         const checkReady = () => {
-          if (
-            map.isSourceLoaded("mapbox-dem") &&
-            map.getTerrain() &&
-            typeof map.queryTerrainElevation === "function"
-          ) {
-            console.log("Terreno listo.");
+          terrainCheckAttempts++;
+          const demLoaded = map.isSourceLoaded("mapbox-dem");
+          const terrainSet = !!map.getTerrain();
+          const elevFnAvailable = typeof map.queryTerrainElevation === "function";
+
+          console.log(`Verificando terreno (intento ${terrainCheckAttempts}):`, { demLoaded, terrainSet, elevFnAvailable });
+
+          if ((demLoaded && terrainSet && elevFnAvailable) || terrainCheckAttempts >= MAX_TERRAIN_ATTEMPTS) {
+            if (terrainCheckAttempts >= MAX_TERRAIN_ATTEMPTS && !demLoaded) {
+              console.warn("Terreno DEM no cargó completamente (posible bloqueador). Continuando de todas formas.");
+              setStatusMessage("Terreno parcial. Carga una ruta para empezar.");
+            } else {
+              console.log("Terreno listo.");
+              setStatusMessage("Terreno 3D listo. Carga una ruta GPX.");
+            }
             setIsTerrainReady(true);
-            setStatusMessage("Terreno 3D listo.");
           } else {
+            setStatusMessage(`Cargando terreno 3D... (${terrainCheckAttempts}/${MAX_TERRAIN_ATTEMPTS})`);
             setTimeout(checkReady, 1000);
           }
         };
@@ -535,7 +553,9 @@ export default function Home() {
       const distanceAlongPath = totalPathDistance * animationPhase;
       currentDistanceRef.current = distanceAlongPath;
 
-      const exactTargetFeature = along(gpxFeature, distanceAlongPath, {
+      // Clamp distance to valid range to prevent turf errors on edge cases
+      const safeDistance = Math.max(0, Math.min(distanceAlongPath, totalPathDistance));
+      const exactTargetFeature = along(gpxFeature, safeDistance, {
         units: "meters",
       });
       const exactTargetCoords = exactTargetFeature.geometry
@@ -583,8 +603,10 @@ export default function Home() {
       );
       previousSmoothedTargetRef.current = smoothedTargetCoords;
 
+      // Use { exaggerated: true } so the returned elevation matches the VISUAL terrain height
+      // (which is scaled by TERRAIN_EXAGGERATION). Without this, the camera flies through mountains.
       const targetElevation =
-        map.queryTerrainElevation(smoothedTargetCoords) ?? 0;
+        map.queryTerrainElevation(smoothedTargetCoords, { exaggerated: true }) ?? 0;
 
       // Update Stats Widget
       if (statsWidgetRef.current) {
@@ -680,23 +702,41 @@ export default function Home() {
       // Update 3D Character
       if (threeLayerRef.current) {
         const tCoords = LngLat.convert(smoothedTargetCoords);
-        // Calculate bearing for the character to face forward
-        // We can use the bearing between current smoothed pos and next small step
+
+        // Use a longer lookahead (30m) for a stable, jitter-free bearing
+        const lookAheadDist = Math.min(distanceAlongPath + 30, totalPathDistance - 1);
         const nextStep = along(
           gpxFeature,
-          distanceAlongPath + 5, // look 5 meters ahead
+          lookAheadDist,
           { units: "meters" }
         );
         const nextCoords = nextStep.geometry.coordinates;
-        const charBearing = bearing(
+        const rawBearing = bearing(
           point([tCoords.lng, tCoords.lat]),
           point(nextCoords)
         );
 
+        // Smooth the bearing to prevent snapping on sharp curves
+        // Lerp with short angular-wrap to avoid 359°→0° jump
+        if (smoothedBearingRef.current === null) {
+          smoothedBearingRef.current = rawBearing;
+        } else {
+          let delta = rawBearing - smoothedBearingRef.current;
+          // Wrap delta to [-180, 180]
+          if (delta > 180) delta -= 360;
+          if (delta < -180) delta += 360;
+          smoothedBearingRef.current = smoothedBearingRef.current + delta * 0.08;
+        }
+        const charBearing = smoothedBearingRef.current;
+
+        // Query exaggerated elevation so the model sits on top of the VISUAL terrain
+        const modelElevation =
+          map.queryTerrainElevation(smoothedTargetCoords, { exaggerated: true }) ?? targetElevation;
+
         threeLayerRef.current.updatePosition(
           tCoords.lng,
           tCoords.lat,
-          targetElevation,
+          modelElevation,
           charBearing
         );
       }
@@ -741,11 +781,20 @@ export default function Home() {
         toggleMapInteractivity(mapRef.current, false);
       }
 
-      // Reset pause state if starting fresh
+      // If resuming from a manual pause, account for the wall-clock time we were paused
+      if (manualPauseWallTimeRef.current > 0 && animationStartTimeRef.current !== null) {
+        const pausedWallMs = performance.now() - manualPauseWallTimeRef.current;
+        totalPausedTimeRef.current += pausedWallMs;
+        manualPauseWallTimeRef.current = 0;
+      }
+
+      // Reset all state only when starting fresh (not resuming)
       if (animationStartTimeRef.current === null) {
         totalPausedTimeRef.current = 0;
         pauseStartTimeRef.current = 0;
         isPausedForPhotoRef.current = false;
+        smoothedBearingRef.current = null;
+        manualPauseWallTimeRef.current = 0; // ← clear any stale pause timestamp
         // Reset photos shown state
         setPhotos((prev) => prev.map((p) => ({ ...p, shown: false })));
       }
@@ -758,6 +807,10 @@ export default function Home() {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
+      }
+      // Record wall-clock time of this manual pause so we can compensate on resume
+      if (animationStartTimeRef.current !== null) {
+        manualPauseWallTimeRef.current = performance.now();
       }
       if (mapRef.current) {
         toggleMapInteractivity(mapRef.current, true);
@@ -870,8 +923,12 @@ export default function Home() {
   };
 
   const handleToggleAnimation = () => {
-    if (!gpxFeature || !isTerrainReady) {
-      setError("La ruta/terreno no están listos.");
+    if (!gpxFeature) {
+      setError("Primero carga una ruta GPX.");
+      return;
+    }
+    if (!isTerrainReady) {
+      setError("Espera a que el terreno termine de cargar.");
       return;
     }
     setError(null);
@@ -893,6 +950,8 @@ export default function Home() {
     totalPausedTimeRef.current = 0;
     pauseStartTimeRef.current = 0;
     isPausedForPhotoRef.current = false;
+    manualPauseWallTimeRef.current = 0;  // ← clear stale pause timestamp
+    smoothedBearingRef.current = null;   // ← reset bearing smoother
     setStatusMessage("Animación reiniciada.");
 
     const map = mapRef.current;

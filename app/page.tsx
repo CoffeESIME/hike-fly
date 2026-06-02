@@ -979,29 +979,42 @@ export default function Home() {
     }
   };
 
-  const handleAddPhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAddPhoto = (event: React.ChangeEvent<HTMLInputElement>, waypointDistanceOverride?: number) => {
     const file = event.target.files?.[0];
-    if (!file || !mapRef.current) return;
+    if (!file) return;
 
     const url = URL.createObjectURL(file);
-    const camera = mapRef.current.getFreeCameraOptions();
-    const position = camera.position;
+    // Use the override distance (from a specific waypoint) or current animation position
+    const capturedDistance = waypointDistanceOverride ?? currentDistanceRef.current;
 
-    if (position) {
-      const lngLat = position.toLngLat();
-      setPhotos((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          url,
-          coordinate: [lngLat.lng, lngLat.lat],
-          distanceAlongPath: 0, // Placeholder, ideally calculated
-          shown: false,
-          enabled: true,
-        },
-      ]);
+    // Get geographic coordinate from gpxFeature at that distance
+    let coord: [number, number] = [0, 0];
+    if (gpxFeature && totalPathDistance > 0) {
+      try {
+        const pt = along(gpxFeature, Math.max(0, Math.min(capturedDistance, totalPathDistance)), { units: "meters" });
+        coord = pt.geometry.coordinates as [number, number];
+      } catch { /* fallback to [0,0] */ }
     }
+
+    setPhotos((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        url,
+        coordinate: coord,
+        distanceAlongPath: capturedDistance,
+        shown: false,
+        enabled: true,
+      },
+    ]);
+
+    // Reset input so same file can be re-added
+    event.target.value = "";
   };
+
+  // Add a photo-less waypoint placeholder at current animation position
+  // (user can attach a photo to it later by clicking the "+" on the waypoint row)
+  const pendingPhotoInputRef = useRef<{[id: string]: HTMLInputElement | null}>({});
 
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1129,110 +1142,112 @@ export default function Home() {
             />
           </div>
 
+          {/* Waypoint / Photo Manager */}
           <div style={{ position: "relative" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <label style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "1px", color: "#888", fontWeight: "600" }}>
+                Puntos de Foto ({photos.length})
+              </label>
+              {photos.some(p => p.shown) && (
+                <button
+                  onClick={() => setPhotos(prev => prev.filter(p => !p.shown))}
+                  style={{ background: "rgba(255,68,68,0.15)", border: "1px solid rgba(255,68,68,0.4)", color: "#ff6666", borderRadius: "4px", padding: "3px 8px", fontSize: "0.7rem", cursor: "pointer" }}
+                  title="Eliminar todos los puntos ya visitados"
+                >
+                  🗑 Limpiar pasados
+                </button>
+              )}
+            </div>
+
+            {/* Add new photo point at current position */}
             <label
               style={{
-                display: "block",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 12px",
+                background: gpxFeature ? "rgba(0, 112, 243, 0.15)" : "rgba(255,255,255,0.05)",
+                border: gpxFeature ? "1px dashed rgba(0,198,255,0.5)" : "1px dashed #444",
+                borderRadius: "6px",
+                cursor: gpxFeature ? "pointer" : "not-allowed",
+                fontSize: "0.8rem",
+                color: gpxFeature ? "#00c6ff" : "#555",
                 marginBottom: "8px",
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                letterSpacing: "1px",
-                color: "#888",
-                fontWeight: "600",
               }}
+              title={gpxFeature ? `Añadir foto en km ${(currentDistanceRef.current / 1000).toFixed(2)}` : "Carga una ruta primero"}
             >
-              Añadir Foto
-            </label>
-            <div style={{ display: "flex", gap: "10px" }}>
+              <span style={{ fontSize: "1.1rem" }}>📷</span>
+              <span>+ Foto en posición actual</span>
               <input
                 type="file"
                 accept="image/*"
-                onChange={handleAddPhoto}
-                disabled={!gpxFeature || isAnimating}
-                style={{
-                  flex: 1,
-                  padding: "8px",
-                  background: "rgba(0,0,0,0.2)",
-                  border: "1px solid #333",
-                  borderRadius: "6px",
-                  color: "#fff",
-                  fontSize: "0.9rem",
-                }}
+                style={{ display: "none" }}
+                disabled={!gpxFeature}
+                onChange={(e) => handleAddPhoto(e)}
               />
-            </div>
-            <div
-              style={{
-                fontSize: "0.7rem",
-                color: "#666",
-                marginTop: "4px",
-                fontStyle: "italic",
-              }}
-            >
-              Se añade en la ubicación actual de la cámara
-            </div>
-          </div>
-          <div style={{ position: "relative" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "8px",
-                fontSize: "0.75rem",
-                textTransform: "uppercase",
-                letterSpacing: "1px",
-                color: "#888",
-                fontWeight: "600",
-              }}
-            >
-              Logo / Sello
             </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleLogoUpload}
-              style={{
-                width: "100%",
-                padding: "8px",
-                background: "rgba(0,0,0,0.2)",
-                border: "1px solid #333",
-                borderRadius: "6px",
-                color: "#fff",
-                fontSize: "0.9rem",
-              }}
-            />
+
+            {/* Waypoint list */}
+            {photos.length > 0 && (
+              <div style={{ maxHeight: "200px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "5px" }}>
+                {[...photos].sort((a, b) => a.distanceAlongPath - b.distanceAlongPath).map((photo) => {
+                  const isPast = photo.shown;
+                  const kmLabel = (photo.distanceAlongPath / 1000).toFixed(2);
+                  return (
+                    <div
+                      key={photo.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        padding: "6px 8px",
+                        background: isPast ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.07)",
+                        border: isPast ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(0,198,255,0.2)",
+                        borderRadius: "6px",
+                        opacity: isPast ? 0.5 : 1,
+                        transition: "opacity 0.3s",
+                      }}
+                    >
+                      {/* Thumbnail */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.url}
+                        alt="thumb"
+                        style={{ width: "32px", height: "32px", objectFit: "cover", borderRadius: "4px", flexShrink: 0 }}
+                      />
+
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "0.75rem", color: isPast ? "#555" : "#ccc", display: "flex", alignItems: "center", gap: "5px" }}>
+                          {isPast ? <span title="Ya visitado" style={{ fontSize: "0.65rem" }}>✅</span> : <span title="Próximo" style={{ fontSize: "0.65rem" }}>📍</span>}
+                          <span style={{ fontWeight: "600" }}>km {kmLabel}</span>
+                        </div>
+                      </div>
+
+                      {/* Enable toggle */}
+                      <input
+                        type="checkbox"
+                        checked={photo.enabled}
+                        onChange={(e) => setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, enabled: e.target.checked } : p))}
+                        title="Activar/Desactivar punto"
+                        style={{ cursor: "pointer" }}
+                      />
+
+                      {/* Delete */}
+                      <button
+                        onClick={() => setPhotos(prev => prev.filter(p => p.id !== photo.id))}
+                        style={{ background: "none", border: "none", color: "#ff4444", cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: "2px" }}
+                        title="Eliminar punto"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Photo List */}
-          {photos.length > 0 && (
-            <div style={{ marginTop: "10px", maxHeight: "150px", overflowY: "auto", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "10px" }}>
-              <label style={{ fontSize: "0.75rem", color: "#888", fontWeight: "600", display: "block", marginBottom: "8px" }}>
-                FOTOS ({photos.length})
-              </label>
-              {photos.map((photo) => (
-                <div key={photo.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", background: "rgba(255,255,255,0.05)", padding: "5px", borderRadius: "4px" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.url} alt="thumb" style={{ width: "30px", height: "30px", objectFit: "cover", borderRadius: "4px" }} />
-                  <div style={{ flex: 1, fontSize: "0.75rem" }}>
-                    <div style={{ color: "#ccc" }}>Km {(photo.distanceAlongPath / 1000).toFixed(2)}</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={photo.enabled}
-                    onChange={(e) => {
-                      setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, enabled: e.target.checked } : p));
-                    }}
-                    title="Habilitar/Deshabilitar"
-                  />
-                  <button
-                    onClick={() => setPhotos(prev => prev.filter(p => p.id !== photo.id))}
-                    style={{ background: "none", border: "none", color: "#ff4444", cursor: "pointer", fontSize: "1rem" }}
-                    title="Eliminar"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Playback Controls */}
@@ -1430,81 +1445,79 @@ export default function Home() {
       {/* Map Container */}
       <div ref={mapContainerRef} style={{ flexGrow: 1, minHeight: 0 }} />
 
-      {/* Photo Overlay */}
-      {
-        activePhoto && (
+      {/* Photo Modal */}
+      {activePhoto && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0, left: 0, width: "100%", height: "100%",
+            background: "rgba(0,0,0,0.75)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 30,
+            animation: "modalFadeIn 0.4s ease",
+          }}
+          onClick={closePhotoOverlay}
+        >
           <div
             style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              background: "rgba(0,0,0,0.8)",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 20,
-              animation: "fadeIn 0.3s ease",
+              maxWidth: "min(85%, 700px)",
+              background: "rgba(15,15,15,0.95)",
+              borderRadius: "16px",
+              border: "1px solid rgba(255,255,255,0.12)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.8)",
+              overflow: "hidden",
+              position: "relative",
             }}
-            onClick={closePhotoOverlay}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div
-              style={{
-                maxWidth: "90%",
-                maxHeight: "80%",
-                background: "white",
-                padding: "10px",
-                borderRadius: "8px",
-                position: "relative",
-              }}
-              onClick={(e) => e.stopPropagation()} // Prevent closing when clicking image
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={activePhoto.url}
-                alt="Route Point"
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "70vh",
-                  display: "block",
-                  borderRadius: "4px",
-                }}
-              />
-              <div style={{
-                marginTop: "10px",
-                color: "#333",
-                fontSize: "0.8rem",
-                textAlign: "center",
-                fontWeight: "bold"
-              }}>
-                {slideshowQueue.length > 1 ? `Foto ${currentSlideIndex + 1} de ${slideshowQueue.length}` : "Punto de Control"}
+            {/* Header */}
+            <div style={{ padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "1rem" }}>📍</span>
+                <span style={{ color: "#ccc", fontSize: "0.85rem", fontWeight: "600", fontFamily: "'Inter', sans-serif" }}>
+                  Punto km {(activePhoto.distanceAlongPath / 1000).toFixed(2)}
+                </span>
               </div>
-              <div style={{
-                height: "4px",
-                background: "#eee",
-                borderRadius: "2px",
-                marginTop: "5px",
-                overflow: "hidden"
-              }}>
-                <div style={{
-                  height: "100%",
-                  background: "#0070f3",
-                  width: "0%",
-                  animation: "progress 3s linear forwards"
-                }} />
-              </div>
-              <style jsx>{`
-                @keyframes progress {
-                  from { width: 0%; }
-                  to { width: 100%; }
-                }
-              `}</style>
+              <button
+                onClick={closePhotoOverlay}
+                style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: "1.3rem", lineHeight: 1 }}
+              >×</button>
+            </div>
+
+            {/* Photo */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={activePhoto.url}
+              alt="Punto de ruta"
+              style={{ width: "100%", maxHeight: "65vh", objectFit: "contain", display: "block", background: "#000" }}
+            />
+
+            {/* Progress bar — animated, 3s countdown */}
+            <div style={{ height: "3px", background: "rgba(255,255,255,0.1)" }}>
+              <div style={{ height: "100%", background: "linear-gradient(90deg, #0070f3, #00c6ff)", width: "0%", animation: "photoCountdown 3s linear forwards" }} />
             </div>
           </div>
-        )
-      }
+
+          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.75rem", marginTop: "14px", fontFamily: "'Inter', sans-serif" }}>
+            Continuando en 3 seg — clic para cerrar
+          </p>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes modalFadeIn {
+          from { opacity: 0; transform: scale(0.97); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+        @keyframes photoCountdown {
+          from { width: 0%; }
+          to   { width: 100%; }
+        }
+      `}</style>
     </div>
   );
 }

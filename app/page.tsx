@@ -190,6 +190,11 @@ export default function Home() {
   const recordingTimeRef = useRef<HTMLSpanElement | null>(null);
   const recordingStartWallRef = useRef<number>(0);
 
+  // Ref to always hold the latest animationStep closure (avoids stale-closure bug
+  // when useCallback deps change and the isAnimating useEffect re-runs)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const animationStepRef = useRef<(timestamp: number) => void>(() => {});
+
   const calculateElevationGain = (geojson: GeoJSON.Feature<GeoJSON.LineString>) => {
     let gain = 0;
     const coords = geojson.geometry.coordinates;
@@ -239,20 +244,24 @@ export default function Home() {
     const camera = map.getFreeCameraOptions();
     if (!camera.position || !camera.orientation) return;
 
+    const dist = currentDistanceRef.current;
+    console.log(`[Keyframe] Capturing at distance=${dist.toFixed(1)}m | manualPauseWall=${manualPauseWallTimeRef.current} | totalPaused=${totalPausedTimeRef.current}ms | animStart=${animationStartTimeRef.current}`);
+
     const newKeyframe: Keyframe = {
-      distance: currentDistanceRef.current,
+      distance: dist,
       position: camera.position,
       orientation: camera.orientation as [number, number, number, number],
     };
 
     setKeyframes((prev) => {
-      const newFrames = [...prev, newKeyframe];
-      // Sort by distance to ensure correct interpolation order
-      return newFrames.sort((a, b) => a.distance - b.distance);
+      const newFrames = [...prev, newKeyframe].sort((a, b) => a.distance - b.distance);
+      console.log(`[Keyframe] Total keyframes now: ${newFrames.length}`);
+      // Auto-enable keyframe mode once we have at least 2
+      if (newFrames.length >= 2) {
+        setUseKeyframes(true);
+      }
+      return newFrames;
     });
-
-    // Visual feedback could be added here
-    console.log("Keyframe captured at distance:", currentDistanceRef.current);
   };
 
   const updateCamera = useCallback(
@@ -776,6 +785,11 @@ export default function Home() {
     ]
   );
 
+  // Keep animationStepRef in sync so the rAF loop always uses the latest closure
+  useEffect(() => {
+    animationStepRef.current = animationStep;
+  }, [animationStep]);
+
   useEffect(() => {
     isAnimatingRef.current = isAnimating;
 
@@ -795,7 +809,10 @@ export default function Home() {
       if (manualPauseWallTimeRef.current > 0 && animationStartTimeRef.current !== null) {
         const pausedWallMs = performance.now() - manualPauseWallTimeRef.current;
         totalPausedTimeRef.current += pausedWallMs;
+        console.log(`[Resume] Resuming. pausedWallMs=${pausedWallMs.toFixed(0)}ms | totalPausedMs=${totalPausedTimeRef.current.toFixed(0)}ms | animStart=${animationStartTimeRef.current}`);
         manualPauseWallTimeRef.current = 0;
+      } else {
+        console.log(`[Start] Fresh start. animStart=${animationStartTimeRef.current}`);
       }
 
       // Reset all state only when starting fresh (not resuming)
@@ -812,15 +829,21 @@ export default function Home() {
       if (animationFrameRef.current)
         cancelAnimationFrame(animationFrameRef.current);
 
-      animationFrameRef.current = requestAnimationFrame(animationStep);
+      animationFrameRef.current = requestAnimationFrame((ts) => animationStepRef.current(ts));
     } else {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
-      // Record wall-clock time of this manual pause so we can compensate on resume
-      if (animationStartTimeRef.current !== null) {
+      // *** FIX: Only record pause timestamp ONCE.
+      // If keyframes/state update causes this effect to re-run while already paused,
+      // we must NOT overwrite the original pause timestamp — that would shrink the
+      // compensated paused duration and make the animation jump forward on resume.
+      if (animationStartTimeRef.current !== null && manualPauseWallTimeRef.current === 0) {
         manualPauseWallTimeRef.current = performance.now();
+        console.log(`[Pause] Pause recorded at wall=${manualPauseWallTimeRef.current.toFixed(0)} | dist=${currentDistanceRef.current.toFixed(1)}m`);
+      } else if (animationStartTimeRef.current !== null) {
+        console.log(`[Pause re-run] useEffect re-ran while already paused — NOT overwriting manualPauseWall (currently ${manualPauseWallTimeRef.current.toFixed(0)})`);
       }
       if (mapRef.current) {
         toggleMapInteractivity(mapRef.current, true);
@@ -839,7 +862,8 @@ export default function Home() {
         toggleMapInteractivity(mapRef.current, true);
       }
     };
-  }, [isAnimating, animationStep, gpxFeature, isTerrainReady, statusMessage]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAnimating, gpxFeature, isTerrainReady, statusMessage]);
 
   // Slideshow Timer Logic
   useEffect(() => {

@@ -35,7 +35,7 @@ const {
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 const CAMERA_PITCH = 60;
 const CAMERA_ALTITUDE_ABOVE_TERRAIN = 500;  // meters above terrain
-const TERRAIN_EXAGGERATION = 2.5;            // higher = more dramatic terrain relief
+const TERRAIN_EXAGGERATION = 1.5;            // higher = more dramatic terrain relief
 const ANIMATION_DURATION_SECONDS = 60;
 const CAMERA_ROTATION_DEGREES = 180;
 const LERP_SMOOTHING_FACTOR = 0.1;
@@ -181,6 +181,15 @@ export default function Home() {
   const statsWidgetRef = useRef<HTMLDivElement>(null);
   const elevationProfileRef = useRef<{ dist: number; ele: number }[]>([]);
 
+  // Video Recording
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingProgressRef = useRef<HTMLDivElement | null>(null);
+  const recordingTimeRef = useRef<HTMLSpanElement | null>(null);
+  const recordingStartWallRef = useRef<number>(0);
+
   const calculateElevationGain = (geojson: GeoJSON.Feature<GeoJSON.LineString>) => {
     let gain = 0;
     const coords = geojson.geometry.coordinates;
@@ -275,6 +284,7 @@ export default function Home() {
         bearing: 0,
         style: "mapbox://styles/mapbox/satellite-streets-v12",
         interactive: true,
+        preserveDrawingBuffer: true, // Required for canvas.captureStream() recording
       });
 
       mapRef.current = map;
@@ -861,6 +871,8 @@ export default function Home() {
     setTotalPathDistance(0);
     setIsAnimating(false);
     setPhotos([]); // Reset photos on new file
+    setKeyframes([]); // Reset keyframes on new file
+    setUseKeyframes(false);
 
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1012,10 +1024,7 @@ export default function Home() {
     event.target.value = "";
   };
 
-  // Add a photo-less waypoint placeholder at current animation position
-  // (user can attach a photo to it later by clicking the "+" on the waypoint row)
-  const pendingPhotoInputRef = useRef<{[id: string]: HTMLInputElement | null}>({});
-
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1027,6 +1036,84 @@ export default function Home() {
     setActivePhoto(null);
     isPausedForPhotoRef.current = false;
   };
+
+  // video-recording-functions-placeholder
+  const handleStartRecording = async () => {
+    if (!gpxFeature || !isTerrainReady) { setError("Carga una ruta primero."); return; }
+    if (recordedVideoUrl) { URL.revokeObjectURL(recordedVideoUrl); setRecordedVideoUrl(null); }
+    recordedChunksRef.current = [];
+
+    // Use getDisplayMedia to capture the full browser tab (includes HTML overlays & photo modals)
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          displaySurface: "browser",
+          frameRate: 30,
+          width: { ideal: window.screen.width },
+          height: { ideal: window.screen.height },
+        },
+        audio: false,
+      });
+    } catch {
+      setError("Permiso denegado o no soportado. Selecciona la pestaña del navegador cuando se te pida.");
+      return;
+    }
+
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+      ? "video/webm;codecs=vp9"
+      : "video/webm";
+    const mr = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 10_000_000 });
+    mr.ondataavailable = (e: BlobEvent) => { if (e.data?.size > 0) recordedChunksRef.current.push(e.data); };
+    mr.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
+      setRecordedVideoUrl(URL.createObjectURL(blob));
+      setIsRecording(false); setIsMenuVisible(true);
+    };
+    // Auto-stop if user clicks "Stop sharing" in the browser UI
+    stream.getVideoTracks()[0].onended = () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      } else {
+        setIsRecording(false); setIsMenuVisible(true);
+      }
+    };
+
+    mediaRecorderRef.current = mr;
+    setIsMenuVisible(false); setError(null); setIsAnimating(false);
+    animationStartTimeRef.current = null; previousSmoothedTargetRef.current = null;
+    totalPausedTimeRef.current = 0; pauseStartTimeRef.current = 0;
+    isPausedForPhotoRef.current = false; manualPauseWallTimeRef.current = 0;
+    smoothedBearingRef.current = null;
+    setPhotos((prev) => prev.map((p) => ({ ...p, shown: false })));
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    recordingStartWallRef.current = performance.now();
+    setIsRecording(true); mr.start(200); setIsAnimating(true);
+  };
+
+  const handleStopRecording = () => {
+    setIsAnimating(false);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") { mediaRecorderRef.current.stop(); }
+    else { setIsRecording(false); setIsMenuVisible(true); }
+  };
+  const handleDownloadVideo = () => {
+    if (!recordedVideoUrl) return;
+    const a = document.createElement("a");
+    a.href = recordedVideoUrl;
+    a.download = "flyby-" + new Date().toISOString().slice(0, 10) + ".webm";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+
+  useEffect(() => {
+    if (!isAnimating && isRecording) {
+      const t = setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") mediaRecorderRef.current.stop();
+      }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [isAnimating, isRecording]);
+
 
   return (
     <div
@@ -1154,7 +1241,7 @@ export default function Home() {
                   style={{ background: "rgba(255,68,68,0.15)", border: "1px solid rgba(255,68,68,0.4)", color: "#ff6666", borderRadius: "4px", padding: "3px 8px", fontSize: "0.7rem", cursor: "pointer" }}
                   title="Eliminar todos los puntos ya visitados"
                 >
-                  🗑 Limpiar pasados
+                  🗑️ Limpiar pasados
                 </button>
               )}
             </div>
@@ -1308,15 +1395,47 @@ export default function Home() {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-            <label style={{ fontSize: "0.8rem", color: "#ccc", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
+            <label
+              style={{
+                fontSize: "0.8rem",
+                color: keyframes.length < 2 ? "#555" : "#ccc",
+                cursor: keyframes.length < 2 ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}
+              title={keyframes.length < 2 ? "Captura al menos 2 vistas para habilitar keyframes" : "Usa vistas de cámara guardadas"}
+            >
               <input
                 type="checkbox"
                 checked={useKeyframes}
                 onChange={(e) => setUseKeyframes(e.target.checked)}
                 disabled={keyframes.length < 2}
+                style={{ cursor: keyframes.length < 2 ? "not-allowed" : "pointer" }}
               />
-              Usar Keyframes ({keyframes.length})
+              Usar Keyframes {keyframes.length < 2 ? "(Mín. 2)" : ""} ({keyframes.length})
             </label>
+
+            {keyframes.length > 0 && (
+              <button
+                onClick={() => {
+                  setKeyframes([]);
+                  setUseKeyframes(false);
+                }}
+                style={{
+                  background: "rgba(255,68,68,0.15)",
+                  border: "1px solid rgba(255,68,68,0.4)",
+                  color: "#ff6666",
+                  borderRadius: "4px",
+                  padding: "3px 8px",
+                  fontSize: "0.7rem",
+                  cursor: "pointer",
+                }}
+                title="Eliminar todos los keyframes capturados"
+              >
+                🗑️ Limpiar keyframes
+              </button>
+            )}
 
             <button
               onClick={handleCaptureKeyframe}
@@ -1351,16 +1470,60 @@ export default function Home() {
                 type="checkbox"
                 checked={hideMenuOnStart}
                 onChange={(e) => setHideMenuOnStart(e.target.checked)}
+                disabled={isRecording}
               />
               Ocultar menú al iniciar
             </label>
+          </div>
+
+          {/* 🎬 Create Video */}
+          <div
+            style={{
+              marginTop: "15px",
+              paddingTop: "15px",
+              borderTop: "1px solid rgba(255,255,255,0.1)",
+            }}
+          >
+            <button
+              onClick={handleStartRecording}
+              disabled={isRecording || isAnimating || !gpxFeature}
+              style={{
+                width: "100%",
+                padding: "11px",
+                background:
+                  isRecording || isAnimating || !gpxFeature
+                    ? "rgba(255,255,255,0.07)"
+                    : "linear-gradient(135deg, #ff416c, #ff4b2b)",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor:
+                  isRecording || isAnimating || !gpxFeature
+                    ? "not-allowed"
+                    : "pointer",
+                fontWeight: "bold",
+                fontSize: "0.9rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                boxShadow:
+                  isRecording || isAnimating || !gpxFeature
+                    ? "none"
+                    : "0 4px 15px rgba(255, 65, 108, 0.4)",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <span style={{ fontSize: "1.2rem" }}>🎬</span>
+              {isRecording ? "GRABANDO..." : "CREAR VIDEO"}
+            </button>
           </div>
         </div>
       </div>
 
       {/* Restore Menu Button (Visible when menu is hidden) */}
       {
-        !isMenuVisible && (
+        !isMenuVisible && !isRecording && (
           <button
             onClick={() => setIsMenuVisible(true)}
             style={{
@@ -1436,10 +1599,123 @@ export default function Home() {
             border: "1px solid rgba(255, 255, 255, 0.1)",
             boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
             zIndex: 10,
-            pointerEvents: "none", // Let clicks pass through
+            pointerEvents: "none",
             fontFamily: "'Inter', sans-serif",
+            opacity: isRecording ? 0 : 1,
+            transition: "opacity 0.3s ease",
           }}
         />
+      )}
+
+      {/* Recording HUD */}
+      {isRecording && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "30px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(10, 10, 10, 0.92)",
+            border: "1px solid rgba(255, 68, 68, 0.45)",
+            borderRadius: "16px",
+            padding: "12px 24px",
+            display: "flex",
+            alignItems: "center",
+            gap: "20px",
+            zIndex: 40,
+            boxShadow: "0 8px 32px rgba(255, 0, 0, 0.25)",
+            color: "white",
+            fontFamily: "'Inter', sans-serif",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div
+              style={{
+                width: "12px",
+                height: "12px",
+                background: "#ff4444",
+                borderRadius: "50%",
+                animation: "recPulse 1.5s infinite",
+              }}
+            />
+            <span style={{ fontWeight: "600", fontSize: "0.9rem", letterSpacing: "1px" }}>GRABANDO</span>
+          </div>
+          <div style={{ width: "200px", height: "6px", background: "rgba(255,255,255,0.1)", borderRadius: "3px", overflow: "hidden" }}>
+            <div ref={recordingProgressRef} style={{ height: "100%", background: "#ff4444", width: "0%" }} />
+          </div>
+          <span ref={recordingTimeRef} style={{ fontFamily: "monospace", fontSize: "1rem" }}>00:00</span>
+          <button
+            onClick={handleStopRecording}
+            style={{
+              background: "rgba(255,255,255,0.1)",
+              border: "1px solid rgba(255,255,255,0.2)",
+              color: "white",
+              padding: "6px 14px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "0.8rem",
+            }}
+          >
+            DETENER
+          </button>
+        </div>
+      )}
+
+      {/* Download Banner (appears after recording stops) */}
+      {!isRecording && recordedVideoUrl && (
+        <div
+          style={{
+            position: "absolute",
+            top: "20px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "linear-gradient(135deg, #00b09b, #96c93d)",
+            color: "white",
+            padding: "12px 24px",
+            borderRadius: "12px",
+            display: "flex",
+            alignItems: "center",
+            gap: "15px",
+            zIndex: 40,
+            boxShadow: "0 8px 32px rgba(0, 176, 155, 0.4)",
+            fontWeight: "600",
+            fontFamily: "'Inter', sans-serif",
+            animation: "modalFadeIn 0.4s ease",
+          }}
+        >
+          <span>✅ Video generado con éxito</span>
+          <button
+            onClick={handleDownloadVideo}
+            style={{
+              background: "white",
+              color: "#00b09b",
+              border: "none",
+              padding: "6px 18px",
+              borderRadius: "20px",
+              cursor: "pointer",
+              fontWeight: "bold",
+              fontSize: "0.85rem",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            }}
+          >
+            ⬇ Descargar
+          </button>
+          <button
+            onClick={() => setRecordedVideoUrl(null)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "rgba(255,255,255,0.75)",
+              cursor: "pointer",
+              fontSize: "1.3rem",
+              lineHeight: 1,
+              padding: "0",
+            }}
+          >
+            ×
+          </button>
+        </div>
       )}
 
       {/* Map Container */}
@@ -1516,6 +1792,10 @@ export default function Home() {
         @keyframes photoCountdown {
           from { width: 0%; }
           to   { width: 100%; }
+        }
+        @keyframes recPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50%       { opacity: 0.3; transform: scale(0.7); }
         }
       `}</style>
     </div>

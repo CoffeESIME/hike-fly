@@ -170,7 +170,7 @@ export default function Home() {
   // Menu Visibility
   const [hideMenuOnStart, setHideMenuOnStart] = useState<boolean>(false);
   const [isMenuVisible, setIsMenuVisible] = useState<boolean>(true);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   // Slideshow State
   const [slideshowQueue, setSlideshowQueue] = useState<PhotoMarker[]>([]);
@@ -180,15 +180,6 @@ export default function Home() {
   const totalElevationGainRef = useRef<number>(0);
   const statsWidgetRef = useRef<HTMLDivElement>(null);
   const elevationProfileRef = useRef<{ dist: number; ele: number }[]>([]);
-
-  // Video Recording
-  const [isRecording, setIsRecording] = useState<boolean>(false);
-  const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordedChunksRef = useRef<Blob[]>([]);
-  const recordingProgressRef = useRef<HTMLDivElement | null>(null);
-  const recordingTimeRef = useRef<HTMLSpanElement | null>(null);
-  const recordingStartWallRef = useRef<number>(0);
 
   // Ref to always hold the latest animationStep closure (avoids stale-closure bug
   // when useCallback deps change and the isAnimating useEffect re-runs)
@@ -1048,95 +1039,13 @@ export default function Home() {
     event.target.value = "";
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setLogoUrl(url);
-  };
+
 
   const closePhotoOverlay = () => {
     setActivePhoto(null);
     isPausedForPhotoRef.current = false;
   };
 
-  // video-recording-functions-placeholder
-  const handleStartRecording = async () => {
-    if (!gpxFeature || !isTerrainReady) { setError("Carga una ruta primero."); return; }
-    if (recordedVideoUrl) { URL.revokeObjectURL(recordedVideoUrl); setRecordedVideoUrl(null); }
-    recordedChunksRef.current = [];
-
-    // Use getDisplayMedia to capture the full browser tab (includes HTML overlays & photo modals)
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          displaySurface: "browser",
-          frameRate: 30,
-          width: { ideal: window.screen.width },
-          height: { ideal: window.screen.height },
-        },
-        audio: false,
-      });
-    } catch {
-      setError("Permiso denegado o no soportado. Selecciona la pestaña del navegador cuando se te pida.");
-      return;
-    }
-
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
-      : "video/webm";
-    const mr = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 10_000_000 });
-    mr.ondataavailable = (e: BlobEvent) => { if (e.data?.size > 0) recordedChunksRef.current.push(e.data); };
-    mr.onstop = () => {
-      stream.getTracks().forEach(t => t.stop());
-      const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
-      setRecordedVideoUrl(URL.createObjectURL(blob));
-      setIsRecording(false); setIsMenuVisible(true);
-    };
-    // Auto-stop if user clicks "Stop sharing" in the browser UI
-    stream.getVideoTracks()[0].onended = () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        mediaRecorderRef.current.stop();
-      } else {
-        setIsRecording(false); setIsMenuVisible(true);
-      }
-    };
-
-    mediaRecorderRef.current = mr;
-    setIsMenuVisible(false); setError(null); setIsAnimating(false);
-    animationStartTimeRef.current = null; previousSmoothedTargetRef.current = null;
-    totalPausedTimeRef.current = 0; pauseStartTimeRef.current = 0;
-    isPausedForPhotoRef.current = false; manualPauseWallTimeRef.current = 0;
-    smoothedBearingRef.current = null;
-    setPhotos((prev) => prev.map((p) => ({ ...p, shown: false })));
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    recordingStartWallRef.current = performance.now();
-    setIsRecording(true); mr.start(200); setIsAnimating(true);
-  };
-
-  const handleStopRecording = () => {
-    setIsAnimating(false);
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") { mediaRecorderRef.current.stop(); }
-    else { setIsRecording(false); setIsMenuVisible(true); }
-  };
-  const handleDownloadVideo = () => {
-    if (!recordedVideoUrl) return;
-    const a = document.createElement("a");
-    a.href = recordedVideoUrl;
-    a.download = "flyby-" + new Date().toISOString().slice(0, 10) + ".webm";
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  };
-
-  useEffect(() => {
-    if (!isAnimating && isRecording) {
-      const t = setTimeout(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") mediaRecorderRef.current.stop();
-      }, 800);
-      return () => clearTimeout(t);
-    }
-  }, [isAnimating, isRecording]);
 
 
   return (
@@ -1494,13 +1403,13 @@ export default function Home() {
                 type="checkbox"
                 checked={hideMenuOnStart}
                 onChange={(e) => setHideMenuOnStart(e.target.checked)}
-                disabled={isRecording}
+                disabled={false}
               />
               Ocultar menú al iniciar
             </label>
           </div>
 
-          {/* 🎬 Create Video */}
+          {/* Avatar Upload */}
           <div
             style={{
               marginTop: "15px",
@@ -1508,46 +1417,87 @@ export default function Home() {
               borderTop: "1px solid rgba(255,255,255,0.1)",
             }}
           >
-            <button
-              onClick={handleStartRecording}
-              disabled={isRecording || isAnimating || !gpxFeature}
+            <label
               style={{
-                width: "100%",
-                padding: "11px",
-                background:
-                  isRecording || isAnimating || !gpxFeature
-                    ? "rgba(255,255,255,0.07)"
-                    : "linear-gradient(135deg, #ff416c, #ff4b2b)",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor:
-                  isRecording || isAnimating || !gpxFeature
-                    ? "not-allowed"
-                    : "pointer",
-                fontWeight: "bold",
-                fontSize: "0.9rem",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                boxShadow:
-                  isRecording || isAnimating || !gpxFeature
-                    ? "none"
-                    : "0 4px 15px rgba(255, 65, 108, 0.4)",
-                transition: "all 0.2s ease",
+                display: "block",
+                marginBottom: "8px",
+                fontSize: "0.75rem",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                color: "#888",
+                fontWeight: "600",
               }}
             >
-              <span style={{ fontSize: "1.2rem" }}>🎬</span>
-              {isRecording ? "GRABANDO..." : "CREAR VIDEO"}
-            </button>
+              Avatar (esquina superior derecha)
+            </label>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "8px 12px",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px dashed rgba(255,255,255,0.2)",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                color: "#ccc",
+              }}
+            >
+              {avatarUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={avatarUrl}
+                  alt="avatar preview"
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    border: "2px solid rgba(0,198,255,0.6)",
+                    flexShrink: 0,
+                  }}
+                />
+              ) : (
+                <span style={{ fontSize: "1.5rem" }}>👤</span>
+              )}
+              <span>{avatarUrl ? "Cambiar avatar" : "Subir foto de perfil"}</span>
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (avatarUrl) URL.revokeObjectURL(avatarUrl);
+                  setAvatarUrl(URL.createObjectURL(file));
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {avatarUrl && (
+              <button
+                onClick={() => { URL.revokeObjectURL(avatarUrl); setAvatarUrl(null); }}
+                style={{
+                  marginTop: "6px",
+                  background: "none",
+                  border: "none",
+                  color: "#ff6666",
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                × Quitar avatar
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {/* Restore Menu Button (Visible when menu is hidden) */}
       {
-        !isMenuVisible && !isRecording && (
+        !isMenuVisible && (
           <button
             onClick={() => setIsMenuVisible(true)}
             style={{
@@ -1575,27 +1525,28 @@ export default function Home() {
         )
       }
 
-      {/* Logo Overlay */}
-      {logoUrl && (
+      {/* Avatar Overlay — top-right corner */}
+      {avatarUrl && (
         <div
           style={{
             position: "absolute",
             top: "20px",
             right: "20px",
-            width: "80px",
-            height: "80px",
+            width: "90px",
+            height: "90px",
             borderRadius: "50%",
             overflow: "hidden",
             zIndex: 20,
-            border: "2px solid white",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-            pointerEvents: "none", // Allow clicking through to map
+            border: "3px solid rgba(255,255,255,0.85)",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.45), 0 0 0 1px rgba(0,198,255,0.3)",
+            pointerEvents: "none",
+            animation: "avatarPop 0.4s cubic-bezier(0.175,0.885,0.32,1.275) both",
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={logoUrl}
-            alt="Group Logo"
+            src={avatarUrl}
+            alt="Avatar"
             style={{
               width: "100%",
               height: "100%",
@@ -1625,122 +1576,12 @@ export default function Home() {
             zIndex: 10,
             pointerEvents: "none",
             fontFamily: "'Inter', sans-serif",
-            opacity: isRecording ? 0 : 1,
+            opacity: 1,
             transition: "opacity 0.3s ease",
           }}
         />
       )}
 
-      {/* Recording HUD */}
-      {isRecording && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: "30px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "rgba(10, 10, 10, 0.92)",
-            border: "1px solid rgba(255, 68, 68, 0.45)",
-            borderRadius: "16px",
-            padding: "12px 24px",
-            display: "flex",
-            alignItems: "center",
-            gap: "20px",
-            zIndex: 40,
-            boxShadow: "0 8px 32px rgba(255, 0, 0, 0.25)",
-            color: "white",
-            fontFamily: "'Inter', sans-serif",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div
-              style={{
-                width: "12px",
-                height: "12px",
-                background: "#ff4444",
-                borderRadius: "50%",
-                animation: "recPulse 1.5s infinite",
-              }}
-            />
-            <span style={{ fontWeight: "600", fontSize: "0.9rem", letterSpacing: "1px" }}>GRABANDO</span>
-          </div>
-          <div style={{ width: "200px", height: "6px", background: "rgba(255,255,255,0.1)", borderRadius: "3px", overflow: "hidden" }}>
-            <div ref={recordingProgressRef} style={{ height: "100%", background: "#ff4444", width: "0%" }} />
-          </div>
-          <span ref={recordingTimeRef} style={{ fontFamily: "monospace", fontSize: "1rem" }}>00:00</span>
-          <button
-            onClick={handleStopRecording}
-            style={{
-              background: "rgba(255,255,255,0.1)",
-              border: "1px solid rgba(255,255,255,0.2)",
-              color: "white",
-              padding: "6px 14px",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "0.8rem",
-            }}
-          >
-            DETENER
-          </button>
-        </div>
-      )}
-
-      {/* Download Banner (appears after recording stops) */}
-      {!isRecording && recordedVideoUrl && (
-        <div
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "linear-gradient(135deg, #00b09b, #96c93d)",
-            color: "white",
-            padding: "12px 24px",
-            borderRadius: "12px",
-            display: "flex",
-            alignItems: "center",
-            gap: "15px",
-            zIndex: 40,
-            boxShadow: "0 8px 32px rgba(0, 176, 155, 0.4)",
-            fontWeight: "600",
-            fontFamily: "'Inter', sans-serif",
-            animation: "modalFadeIn 0.4s ease",
-          }}
-        >
-          <span>✅ Video generado con éxito</span>
-          <button
-            onClick={handleDownloadVideo}
-            style={{
-              background: "white",
-              color: "#00b09b",
-              border: "none",
-              padding: "6px 18px",
-              borderRadius: "20px",
-              cursor: "pointer",
-              fontWeight: "bold",
-              fontSize: "0.85rem",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            }}
-          >
-            ⬇ Descargar
-          </button>
-          <button
-            onClick={() => setRecordedVideoUrl(null)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "rgba(255,255,255,0.75)",
-              cursor: "pointer",
-              fontSize: "1.3rem",
-              lineHeight: 1,
-              padding: "0",
-            }}
-          >
-            ×
-          </button>
-        </div>
-      )}
 
       {/* Map Container */}
       <div ref={mapContainerRef} style={{ flexGrow: 1, minHeight: 0 }} />
@@ -1820,6 +1661,10 @@ export default function Home() {
         @keyframes recPulse {
           0%, 100% { opacity: 1; transform: scale(1); }
           50%       { opacity: 0.3; transform: scale(0.7); }
+        }
+        @keyframes avatarPop {
+          from { opacity: 0; transform: scale(0.6); }
+          to   { opacity: 1; transform: scale(1); }
         }
       `}</style>
     </div>

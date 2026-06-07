@@ -1327,67 +1327,78 @@ export default function Home() {
             borderTop: "1px solid rgba(255,255,255,0.1)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-            <label
-              style={{
-                fontSize: "0.8rem",
-                color: keyframes.length < 2 ? "#555" : "#ccc",
-                cursor: keyframes.length < 2 ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px"
-              }}
-              title={keyframes.length < 2 ? "Captura al menos 2 vistas para habilitar keyframes" : "Usa vistas de cámara guardadas"}
-            >
-              <input
-                type="checkbox"
-                checked={useKeyframes}
-                onChange={(e) => setUseKeyframes(e.target.checked)}
-                disabled={keyframes.length < 2}
-                style={{ cursor: keyframes.length < 2 ? "not-allowed" : "pointer" }}
-              />
-              Usar Keyframes {keyframes.length < 2 ? "(Mín. 2)" : ""} ({keyframes.length})
-            </label>
+          {/* Row 1: Checkbox */}
+          <label
+            style={{
+              fontSize: "0.82rem",
+              color: keyframes.length < 2 ? "#555" : "#ccc",
+              cursor: keyframes.length < 2 ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              marginBottom: "10px",
+            }}
+            title={keyframes.length < 2 ? "Captura al menos 2 vistas para habilitar keyframes" : "Usa vistas de cámara guardadas"}
+          >
+            <input
+              type="checkbox"
+              checked={useKeyframes}
+              onChange={(e) => setUseKeyframes(e.target.checked)}
+              disabled={keyframes.length < 2}
+              style={{ cursor: keyframes.length < 2 ? "not-allowed" : "pointer" }}
+            />
+            Usar Keyframes {keyframes.length < 2 ? "(Mín. 2)" : ""} ({keyframes.length})
+          </label>
 
-            {keyframes.length > 0 && (
-              <button
-                onClick={() => {
-                  setKeyframes([]);
-                  setUseKeyframes(false);
-                }}
-                style={{
-                  background: "rgba(255,68,68,0.15)",
-                  border: "1px solid rgba(255,68,68,0.4)",
-                  color: "#ff6666",
-                  borderRadius: "4px",
-                  padding: "3px 8px",
-                  fontSize: "0.7rem",
-                  cursor: "pointer",
-                }}
-                title="Eliminar todos los keyframes capturados"
-              >
-                🗑️ Limpiar keyframes
-              </button>
-            )}
-
+          {/* Row 2: Action Buttons */}
+          <div style={{ display: "flex", gap: "8px" }}>
             <button
               onClick={handleCaptureKeyframe}
               disabled={isAnimating || !gpxFeature}
               style={{
-                padding: "6px 12px",
-                background: "rgba(255, 165, 0, 0.2)",
-                color: "orange",
-                border: "1px solid orange",
-                borderRadius: "6px",
-                fontSize: "0.75rem",
-                cursor: "pointer",
-                fontWeight: "bold",
+                flex: 1,
+                padding: "9px 0",
+                background: (isAnimating || !gpxFeature)
+                  ? "rgba(255,255,255,0.04)"
+                  : "rgba(0, 198, 255, 0.12)",
+                color: (isAnimating || !gpxFeature) ? "#555" : "#00c6ff",
+                border: `1px solid ${(isAnimating || !gpxFeature) ? "rgba(255,255,255,0.1)" : "rgba(0,198,255,0.45)"}`,
+                borderRadius: "8px",
+                fontSize: "0.78rem",
+                fontWeight: "700",
+                cursor: (isAnimating || !gpxFeature) ? "not-allowed" : "pointer",
+                letterSpacing: "0.03em",
+                transition: "background 0.2s, border-color 0.2s",
               }}
             >
-              + CAPTURAR VISTA
+              📷 Capturar Vista
+            </button>
+
+            <button
+              onClick={() => { setKeyframes([]); setUseKeyframes(false); }}
+              disabled={keyframes.length === 0}
+              style={{
+                flex: 1,
+                padding: "9px 0",
+                background: keyframes.length === 0
+                  ? "rgba(255,255,255,0.04)"
+                  : "rgba(255, 68, 68, 0.1)",
+                color: keyframes.length === 0 ? "#555" : "#ff7070",
+                border: `1px solid ${keyframes.length === 0 ? "rgba(255,255,255,0.1)" : "rgba(255,68,68,0.4)"}`,
+                borderRadius: "8px",
+                fontSize: "0.78rem",
+                fontWeight: "700",
+                cursor: keyframes.length === 0 ? "not-allowed" : "pointer",
+                letterSpacing: "0.03em",
+                transition: "background 0.2s, border-color 0.2s",
+              }}
+              title="Eliminar todos los keyframes capturados"
+            >
+              🗑️ Limpiar Frames
             </button>
           </div>
-          <div style={{ fontSize: "0.7rem", color: "#666", fontStyle: "italic" }}>
+
+          <div style={{ fontSize: "0.7rem", color: "#555", fontStyle: "italic", marginTop: "8px" }}>
             Pausa, mueve la cámara y captura para crear una ruta personalizada.
           </div>
           {/* Hide Menu Option */}

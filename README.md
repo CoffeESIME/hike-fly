@@ -121,6 +121,25 @@ Puedes personalizar diversos aspectos de la animación y la cámara editando las
 |-----------|-------------------|-------------|
 | `modelAltitude` | `35` | Altura del modelo 3D sobre la superficie del terreno para evitar colisión con objetos o relieve. |
 
+### 🛠️ Personalización del Modelo 3D (Cualquier Modelo .GLB)
+
+Es posible utilizar prácticamente **cualquier modelo 3D** (un excursionista, un avatar, un coche, un dron, etc.) en formato `.glb`. Tienes dos formas sencillas de hacerlo:
+
+1. **Reemplazo Directo (Sin cambiar código)**:
+   * Consigue tu modelo en formato `.glb`.
+   * Renómbralo como `mixtli-model.glb`.
+   * Reemplaza el archivo existente en `public/models/mixtli-model.glb`.
+
+2. **Personalizando la Ruta en el Código**:
+   * Guarda tu archivo `.glb` dentro de la carpeta `public/models/` (por ejemplo, `public/models/mi-excursionista.glb`).
+   * Abre [ThreeCustomLayer.ts](file:///c:/Users/USER/Desktop/Proyectos/senderismoProjects/flyby-hiking/mapbox-gpx-viewer/app/utils/ThreeCustomLayer.ts) y edita la ruta en la función `loadModel()` (alrededor de la línea 58):
+     ```typescript
+     loader.load(
+         "/models/mi-excursionista.glb",
+         (gltf) => { ... }
+     );
+     ```
+
 ---
 
 ## 🚀 Guía de Uso

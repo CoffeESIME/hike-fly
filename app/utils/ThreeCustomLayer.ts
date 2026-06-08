@@ -52,11 +52,18 @@ export class ThreeCustomLayer implements mapboxgl.CustomLayerInterface {
         this.loadModel();
     }
 
-    private loadModel() {
+    public changeModel(modelUrl: string) {
+        this.loadModel(modelUrl);
+    }
+
+    private loadModel(modelUrl: string = "/models/mixtli-model.glb") {
         const loader = new GLTFLoader();
         loader.load(
-            "/models/mixtli-model.glb",
+            modelUrl,
             (gltf) => {
+                if (this.model) {
+                    this.scene.remove(this.model);
+                }
                 this.model = gltf.scene;
 
                 // Fix materials

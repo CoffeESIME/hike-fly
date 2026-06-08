@@ -53,6 +53,10 @@ type Props = {
   // Avatar
   avatarUrl: string | null;
   setAvatarUrl: React.Dispatch<React.SetStateAction<string | null>>;
+  // Model
+  customModelUrl: string | null;
+  setCustomModelUrl: React.Dispatch<React.SetStateAction<string | null>>;
+  handleModelChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -70,6 +74,7 @@ export function Sidebar({
   handleCaptureKeyframe,
   hideMenuOnStart, setHideMenuOnStart,
   avatarUrl, setAvatarUrl,
+  customModelUrl, setCustomModelUrl, handleModelChange,
 }: Props) {
   return (
     <>
@@ -345,6 +350,23 @@ export function Sidebar({
                 × Quitar avatar
               </button>
             )}
+          </div>
+
+          {/* Custom Model upload */}
+          <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+            <label style={{ display: "block", marginBottom: "8px", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "1px", color: "#888", fontWeight: "600" }}>
+              Modelo 3D (.glb, .gltf)
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "rgba(255,255,255,0.05)", border: "1px dashed rgba(255,255,255,0.2)", borderRadius: "8px", cursor: "pointer", fontSize: "0.8rem", color: "#ccc" }}>
+              <span style={{ fontSize: "1.5rem" }}>🧊</span>
+              <span>{customModelUrl ? "Cambiar modelo 3D" : "Subir modelo 3D"}</span>
+              <input
+                type="file"
+                accept=".glb,.gltf"
+                style={{ display: "none" }}
+                onChange={handleModelChange}
+              />
+            </label>
           </div>
         </div>
       </div>

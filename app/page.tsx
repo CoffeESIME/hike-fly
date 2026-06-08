@@ -61,6 +61,7 @@ export default function Home() {
   const [isMenuVisible,   setIsMenuVisible]   = useState(true);
   const [hideMenuOnStart, setHideMenuOnStart] = useState(false);
   const [avatarUrl,       setAvatarUrl]       = useState<string | null>(null);
+  const [customModelUrl,  setCustomModelUrl]  = useState<string | null>(null);
 
   // ---- Camera settings ---------------------------------------------------
   const {
@@ -226,6 +227,24 @@ export default function Home() {
     event.target.value = "";
   };
 
+  // ---- handleModelChange -------------------------------------------------
+  const handleModelChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (customModelUrl) {
+      URL.revokeObjectURL(customModelUrl);
+    }
+
+    const url = URL.createObjectURL(file);
+    setCustomModelUrl(url);
+    if (threeLayerRef.current) {
+      threeLayerRef.current.changeModel(url);
+      setStatusMessage("Modelo 3D actualizado.");
+    }
+    event.target.value = "";
+  };
+
   // ---- Camera slider definitions -----------------------------------------
   const cameraSliders = [
     { label: "Altitud cámara", unit: "m", value: cameraAltitude, min: 50, max: 2000, step: 50, onChange: setCameraAltitude, tip: "Altura de la cámara sobre el terreno (metros)" },
@@ -276,6 +295,9 @@ export default function Home() {
         setHideMenuOnStart={setHideMenuOnStart}
         avatarUrl={avatarUrl}
         setAvatarUrl={setAvatarUrl}
+        customModelUrl={customModelUrl}
+        setCustomModelUrl={setCustomModelUrl}
+        handleModelChange={handleModelChange}
       />
 
       {/* Avatar badge (top-right) */}

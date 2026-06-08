@@ -5,6 +5,7 @@ import { PhotoMarker } from "../types";
 type Props = {
   photo: PhotoMarker;
   onClose: () => void;
+  onAdvance?: () => void;
 };
 
 /**
@@ -12,7 +13,7 @@ type Props = {
  * Clicking the backdrop or the × button calls `onClose`.
  * The animated progress bar reflects the 3-second auto-advance timer.
  */
-export function PhotoOverlay({ photo, onClose }: Props) {
+export function PhotoOverlay({ photo, onClose, onAdvance }: Props) {
   return (
     <div
       style={{
@@ -55,22 +56,35 @@ export function PhotoOverlay({ photo, onClose }: Props) {
           >×</button>
         </div>
 
-        {/* Photo */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={photo.url}
-          alt="Punto de ruta"
-          style={{ width: "100%", maxHeight: "65vh", objectFit: "contain", display: "block", background: "#000" }}
-        />
+        {/* Media */}
+        {photo.mediaType === "video" ? (
+          <video
+            src={photo.url}
+            autoPlay
+            playsInline
+            controls
+            onEnded={() => onAdvance && onAdvance()}
+            style={{ width: "100%", maxHeight: "65vh", display: "block", background: "#000" }}
+          />
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={photo.url}
+            alt="Punto de ruta"
+            style={{ width: "100%", maxHeight: "65vh", objectFit: "contain", display: "block", background: "#000" }}
+          />
+        )}
 
-        {/* 3-second countdown bar */}
-        <div style={{ height: "3px", background: "rgba(255,255,255,0.1)" }}>
-          <div style={{ height: "100%", background: "linear-gradient(90deg, #0070f3, #00c6ff)", width: "0%", animation: "photoCountdown 3s linear forwards" }} />
-        </div>
+        {/* Countdown bar (only for images since videos have their own controls/duration) */}
+        {photo.mediaType !== "video" && (
+          <div style={{ height: "3px", background: "rgba(255,255,255,0.1)" }}>
+            <div style={{ height: "100%", background: "linear-gradient(90deg, #0070f3, #00c6ff)", width: "0%", animation: "photoCountdown 3s linear forwards" }} />
+          </div>
+        )}
       </div>
 
       <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.75rem", marginTop: "14px", fontFamily: "'Inter', sans-serif" }}>
-        Continuando en 3 seg — clic para cerrar
+        {photo.mediaType === "video" ? "Reproduciendo video — clic en la X o fuera para cerrar" : "Continuando en 3 seg — clic para cerrar"}
       </p>
     </div>
   );

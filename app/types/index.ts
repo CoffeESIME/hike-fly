@@ -8,6 +8,8 @@ export type PhotoMarker = {
   coordinate: [number, number]; // [lng, lat]
   shown: boolean;   // Whether it has already been shown in the current animation run
   enabled: boolean; // Whether it is visible/active (user can toggle)
+  mediaType: "image" | "video";
+  duration?: number; // Video duration in seconds
 };
 
 // A user-placed camera keyframe captured mid-animation

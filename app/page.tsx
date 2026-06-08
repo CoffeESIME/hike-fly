@@ -9,13 +9,7 @@ import * as turf from "@turf/turf";
 
 // Types & constants
 import { PhotoMarker, Keyframe } from "./types";
-import {
-  DEFAULT_CAMERA_PITCH,
-  DEFAULT_CAMERA_ALTITUDE,
-  DEFAULT_TERRAIN_EXAGGERATION,
-  DEFAULT_ANIMATION_DURATION,
-  DEFAULT_CAMERA_ROTATION,
-} from "./constants/defaults";
+
 
 // Hooks
 import { useMapInit }       from "./hooks/useMapInit";
@@ -89,9 +83,9 @@ export default function Home() {
   // ---- Slideshow ---------------------------------------------------------
   const {
     activePhoto, setActivePhoto,
-    slideshowQueue, setSlideshowQueue,
-    currentSlideIndex, setCurrentSlideIndex,
-    isPausedForPhotoRef, closePhotoOverlay,
+    setSlideshowQueue,
+    setCurrentSlideIndex,
+    isPausedForPhotoRef, closePhotoOverlay, advanceSlideshow,
   } = useSlideshow();
 
   // ---- Animation ---------------------------------------------------------
@@ -171,13 +165,14 @@ export default function Home() {
   };
 
   // ---- handleAddPhoto ----------------------------------------------------
-  const handleAddPhoto = (
+  const handleAddPhoto = async (
     event: React.ChangeEvent<HTMLInputElement>,
     waypointDistanceOverride?: number
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    const isVideo = file.type.startsWith("video/");
     const url = URL.createObjectURL(file);
     const capturedDistance = waypointDistanceOverride ?? currentDistanceRef.current;
 
@@ -189,9 +184,44 @@ export default function Home() {
       } catch { /* fallback to [0,0] */ }
     }
 
+    let duration: number | undefined;
+    if (isVideo) {
+      const video = document.createElement("video");
+      video.src = url;
+      try {
+        await new Promise<void>((resolve, reject) => {
+          video.onloadedmetadata = () => {
+            duration = video.duration;
+            resolve();
+          };
+          video.onerror = () => {
+            reject(new Error("Failed to load video metadata"));
+          };
+        });
+      } catch (err) {
+        console.error(err);
+      }
+
+      if (duration && duration > 10.5) {
+        alert("El video no debe exceder los 10 segundos.");
+        URL.revokeObjectURL(url);
+        event.target.value = "";
+        return;
+      }
+    }
+
     setPhotos((prev) => [
       ...prev,
-      { id: Date.now().toString(), url, coordinate: coord, distanceAlongPath: capturedDistance, shown: false, enabled: true },
+      { 
+        id: Date.now().toString(), 
+        url, 
+        coordinate: coord, 
+        distanceAlongPath: capturedDistance, 
+        shown: false, 
+        enabled: true,
+        mediaType: isVideo ? "video" : "image",
+        duration
+      },
     ]);
     event.target.value = "";
   };
@@ -258,7 +288,7 @@ export default function Home() {
       <div ref={mapContainerRef} style={{ flexGrow: 1, minHeight: 0 }} />
 
       {/* Photo slideshow overlay */}
-      {activePhoto && <PhotoOverlay photo={activePhoto} onClose={closePhotoOverlay} />}
+      {activePhoto && <PhotoOverlay photo={activePhoto} onClose={closePhotoOverlay} onAdvance={advanceSlideshow} />}
 
       {/* Global keyframe animations */}
       <style>{`

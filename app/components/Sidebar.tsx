@@ -146,11 +146,11 @@ export function Sidebar({
             {/* Add photo at current position */}
             <label
               style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: gpxFeature ? "rgba(0,112,243,0.15)" : "rgba(255,255,255,0.05)", border: gpxFeature ? "1px dashed rgba(0,198,255,0.5)" : "1px dashed #444", borderRadius: "6px", cursor: gpxFeature ? "pointer" : "not-allowed", fontSize: "0.8rem", color: gpxFeature ? "#00c6ff" : "#555", marginBottom: "8px" }}
-              title={gpxFeature ? `Añadir foto en km ${currentDistanceKm.toFixed(2)}` : "Carga una ruta primero"}
+              title={gpxFeature ? `Añadir foto/video en km ${currentDistanceKm.toFixed(2)}` : "Carga una ruta primero"}
             >
               <span style={{ fontSize: "1.1rem" }}>📷</span>
-              <span>+ Foto en posición actual</span>
-              <input type="file" accept="image/*" style={{ display: "none" }} disabled={!gpxFeature} onChange={(e) => handleAddPhoto(e)} />
+              <span>+ Media en posición actual</span>
+              <input type="file" accept="image/*,video/*" style={{ display: "none" }} disabled={!gpxFeature} onChange={(e) => handleAddPhoto(e)} />
             </label>
 
             {/* Photo list */}
@@ -161,8 +161,14 @@ export function Sidebar({
                   const kmLabel = (photo.distanceAlongPath / 1000).toFixed(2);
                   return (
                     <div key={photo.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 8px", background: isPast ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.07)", border: isPast ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(0,198,255,0.2)", borderRadius: "6px", opacity: isPast ? 0.5 : 1, transition: "opacity 0.3s" }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo.url} alt="thumb" style={{ width: "32px", height: "32px", objectFit: "cover", borderRadius: "4px", flexShrink: 0 }} />
+                      {photo.mediaType === "video" ? (
+                        <div style={{ width: "32px", height: "32px", background: "rgba(0,0,0,0.5)", borderRadius: "4px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", border: "1px solid rgba(255,255,255,0.1)" }} title="Video">
+                          🎥
+                        </div>
+                      ) : (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={photo.url} alt="thumb" style={{ width: "32px", height: "32px", objectFit: "cover", borderRadius: "4px", flexShrink: 0 }} />
+                      )}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: "0.75rem", color: isPast ? "#555" : "#ccc", display: "flex", alignItems: "center", gap: "5px" }}>
                           {isPast ? <span title="Ya visitado" style={{ fontSize: "0.65rem" }}>✅</span> : <span title="Próximo" style={{ fontSize: "0.65rem" }}>📍</span>}

@@ -13,6 +13,8 @@ export type UseSlideshowReturn = {
   isPausedForPhotoRef: React.MutableRefObject<boolean>;
   /** Close the active photo overlay and fully reset all slideshow state. */
   closePhotoOverlay: () => void;
+  /** Manually advance to the next slide (useful for when a video ends) */
+  advanceSlideshow: () => void;
 };
 
 /**
@@ -28,25 +30,29 @@ export function useSlideshow(): UseSlideshowReturn {
 
   const isPausedForPhotoRef = useRef<boolean>(false);
 
+  const advanceSlideshow = () => {
+    const nextIndex = currentSlideIndex + 1;
+    if (nextIndex < slideshowQueue.length) {
+      setCurrentSlideIndex(nextIndex);
+      setActivePhoto(slideshowQueue[nextIndex]);
+    } else {
+      // End of slideshow — resume animation
+      setActivePhoto(null);
+      setSlideshowQueue([]);
+      setCurrentSlideIndex(-1);
+      isPausedForPhotoRef.current = false;
+    }
+  };
+
   // Auto-advance or end the slideshow after 3 seconds per photo
   useEffect(() => {
     if (!activePhoto || slideshowQueue.length === 0) return;
+    if (activePhoto.mediaType === "video") return;
 
-    const timer = setTimeout(() => {
-      const nextIndex = currentSlideIndex + 1;
-      if (nextIndex < slideshowQueue.length) {
-        setCurrentSlideIndex(nextIndex);
-        setActivePhoto(slideshowQueue[nextIndex]);
-      } else {
-        // End of slideshow — resume animation
-        setActivePhoto(null);
-        setSlideshowQueue([]);
-        setCurrentSlideIndex(-1);
-        isPausedForPhotoRef.current = false;
-      }
-    }, 3000);
+    const timer = setTimeout(advanceSlideshow, 3000);
 
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePhoto, slideshowQueue, currentSlideIndex]);
 
   const closePhotoOverlay = () => {
@@ -65,5 +71,6 @@ export function useSlideshow(): UseSlideshowReturn {
     setCurrentSlideIndex,
     isPausedForPhotoRef,
     closePhotoOverlay,
+    advanceSlideshow,
   };
 }

@@ -84,8 +84,8 @@ Para ejecutar este proyecto en tu entorno local necesitas:
 
 ### 1. Clonar el repositorio y entrar al proyecto
 ```bash
-git clone https://github.com/tu-usuario/flyby-hiking.git
-cd flyby-hiking/mapbox-gpx-viewer
+git clone https://github.com/CoffeESIME/hike-fly.git
+cd hike-fly/mapbox-gpx-viewer
 ```
 
 ### 2. Instalar dependencias
@@ -204,9 +204,8 @@ Es posible utilizar prácticamente **cualquier modelo 3D** en formato `.glb`/`.g
 
 ### Estructura de Carpetas
 ```
-flyby-hiking/
-├── index.html                        # Prototipo antiguo standalone HTML/JS
-└── mapbox-gpx-viewer/
+hike-fly/                             # Directorio raíz del repositorio
+└── mapbox-gpx-viewer/                 # Proyecto Next.js
     ├── app/
     │   ├── components/               # Componentes React modulares de interfaz
     │   │   ├── AvatarBadge.tsx       # Insignia del avatar flotante (esquina superior derecha)

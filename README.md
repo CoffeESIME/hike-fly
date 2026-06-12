@@ -173,9 +173,8 @@ Es posible utilizar prácticamente **cualquier modelo 3D** en formato `.glb`/`.g
 
 1. **Carga tu archivo GPX**: Haz clic en el botón "Seleccionar archivo GPX" en el panel lateral. El mapa se reubicará al inicio de tu ruta de forma automática y creará el perfil de elevación.
 2. **Personaliza tu Avatar (Opcional)**: En la pestaña "Avatar" de la barra lateral, sube tu foto de perfil.
-3. **Agrega fotos de ruta (Opcional)**:
-   - Sube una o varias imágenes en la sección "Fotos del Recorrido".
-   - Introduce el kilómetro donde deseas ubicar cada foto (ej. `2.5` para el kilómetro 2.5).
+3. **Agrega fotos o videos de ruta (Opcional)**:
+   - Para añadir fotos o videos durante el recorrido, haz clic en **"+ Media en posición actual"** en la sección de "Puntos de Foto". El archivo multimedia (fotos o videos de hasta 10s) se asociará automáticamente al kilómetro exacto en el que se encuentre la simulación.
 4. **Captura Keyframes de Cámara (Opcional)**:
    - Pausa la animación.
    - Navega en el mapa (clic derecho + arrastrar para rotar e inclinar) hasta el encuadre perfecto.
@@ -209,22 +208,44 @@ flyby-hiking/
 ├── index.html                        # Prototipo antiguo standalone HTML/JS
 └── mapbox-gpx-viewer/
     ├── app/
-    │   ├── page.tsx                  # Componente principal React y UI de control
-    │   ├── layout.tsx                # Definición de fuentes Geist y metadatos
-    │   ├── globals.css               # Estilos globales y Tailwind CSS 4.x
-    │   └── utils/
-    │       └── ThreeCustomLayer.ts   # Capa WebGL que integra Three.js con Mapbox
+    │   ├── components/               # Componentes React modulares de interfaz
+    │   │   ├── AvatarBadge.tsx       # Insignia del avatar flotante (esquina superior derecha)
+    │   │   ├── PhotoOverlay.tsx      # Visor multimedia fullscreen (fotos y videos en waypoints)
+    │   │   ├── RouteCompleteOverlay.tsx # Modal de resumen al finalizar recorrido (estadísticas GPX)
+    │   │   ├── Sidebar.tsx           # Panel lateral con sliders y herramientas de carga
+    │   │   └── StatsWidget.tsx       # HUD inferior translúcido (Glassmorphism)
+    │   ├── constants/
+    │   │   └── defaults.ts           # Variables de configuración por defecto centralizadas
+    │   ├── hooks/                    # Hooks personalizados con lógica desacoplada
+    │   │   ├── useAnimation.ts       # Bucle de animación (flyby) y control de cámara orbital
+    │   │   ├── useCameraSettings.ts  # Estado reactivo y enlace de configuraciones de cámara/relieve
+    │   │   ├── useGpxProcessor.ts    # Procesamiento GPX, distancias y cálculo de elevación
+    │   │   ├── useMapInit.ts         # Inicialización de Mapbox, estilos satelitales y capas DEM
+    │   │   ├── usePhotoMarkers.ts    # Gestión de hitos y coordenadas de waypoints multimedia
+    │   │   └── useSlideshow.ts       # Lógica del carrusel, pausa y reanudación automática
+    │   ├── types/
+    │   │   └── index.ts              # Definiciones de tipado TypeScript
+    │   ├── utils/                    # Funciones utilitarias puras y helpers
+    │   │   ├── ThreeCustomLayer.ts   # Capa WebGL/Three.js para renderizar y orientar el modelo 3D
+    │   │   ├── gpxUtils.ts           # Utilidades para lectura, análisis e interpolación de GPX
+    │   │   ├── mapUtils.ts           # Funciones de cámara, ajustes de mapa (fitBounds) y giros
+    │   │   └── photoUtils.ts         # Procesadores de metadatos de imágenes y duración de video
+    │   ├── globals.css               # Estilos globales y configuración Tailwind CSS 4.x
+    │   ├── layout.tsx                # Estructura del documento HTML raíz y fuentes Geist
+    │   └── page.tsx                  # Componente contenedor raíz y coordinador de estados reactivos
     ├── public/
     │   └── models/
-    │       └── mixtli-model.glb      # Modelo 3D del personaje
-    ├── package.json                  # Dependencias y scripts npm
-    └── tsconfig.json                 # Configuración de TypeScript
+    │       └── mixtli-model.glb      # Modelo 3D por defecto del personaje
+    ├── package.json                  # Script e inventario de dependencias
+    └── tsconfig.json                 # Configuración del compilador TypeScript
 ```
 
-### Funcionamiento de la Capa 3D
-La integración 3D se realiza en [ThreeCustomLayer.ts](file:///c:/Users/USER/Desktop/Proyectos/senderismoProjects/flyby-hiking/mapbox-gpx-viewer/app/utils/ThreeCustomLayer.ts). Mapbox permite capas personalizadas (`CustomLayerInterface`) que exponen su contexto de WebGL. 
-- En el método `onAdd`, inicializamos la escena de Three.js, la cámara y el cargador de modelos GLTF (`GLTFLoader`).
-- En el método `render`, convertimos las coordenadas geográficas de latitud y longitud del personaje a coordenadas de proyección Mercator nativas de Mapbox, y reposicionamos la matriz de cámara para sincronizar los mundos 3D de Mapbox y Three.js.
+### 🏛️ Diseño Arquitectónico Modular
+La aplicación implementa un patrón desacoplado para mantener alto rendimiento a 60 FPS coordinando **React**, **Mapbox GL** y **Three.js**:
+- **Coordinador Raíz (`page.tsx`)**: Actúa como contenedor de estado principal, inicializando referencias cruzadas y pasando datos mínimos entre componentes.
+- **Separación de Lógica en Hooks (`hooks/`)**: La lógica de negocio está completamente separada de los componentes visuales. La carga de GPX, la inicialización del mapa y la orquestación del bucle se ejecutan de manera aislada en sus respectivos hooks.
+- **Rendimiento HUD a 60 FPS (`StatsWidget.tsx`)**: Para evitar retrabajos de renderizado en React durante la reproducción rápida, el bucle en `useAnimation.ts` modifica directamente la propiedad `innerHTML` del nodo del widget de estadísticas (`statsRef.current`) mediante referencias del DOM.
+- **Sincronización WebGL 3D (`ThreeCustomLayer.ts`)**: La capa customizada de Mapbox actúa como un puente directo al contexto WebGL. En cada fotograma (`render`), convierte coordenadas geográficas (latitud/longitud/altitud) del personaje a la proyección espacial nativa de Mapbox y sincroniza la proyección de la cámara de Three.js.
 
 ---
 

@@ -263,7 +263,7 @@ export default function Home() {
     { label: "Altitud cámara", unit: "m", value: cameraAltitude, min: 50, max: 2000, step: 50, onChange: setCameraAltitude, tip: "Altura de la cámara sobre el terreno (metros)" },
     { label: "Inclinación cámara", unit: "°", value: cameraPitch, min: 0, max: 85, step: 5, onChange: setCameraPitch, tip: "0° = vista cenital, 85° = horizonte" },
     { label: "Rotación orbital", unit: "°", value: cameraRotation, min: 0, max: 720, step: 10, onChange: setCameraRotation, tip: "Grados que rota la cámara durante todo el recorrido" },
-    { label: "Duración animación", unit: "s", value: animationDuration, min: 15, max: 300, step: 15, onChange: setAnimationDuration, tip: "Duración total del recorrido animado" },
+    { label: "Duración animación", unit: "s", value: animationDuration, min: 15, max: 300, step: 5, onChange: setAnimationDuration, tip: "Duración total del recorrido animado" },
     {
       label: "Exageración terreno", unit: "x", value: terrainExaggeration, min: 0.5, max: 4, step: 0.1,
       onChange: (v: number) => setTerrainExaggeration(v, mapRef),

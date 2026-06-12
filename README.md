@@ -137,7 +137,7 @@ Durante la ejecución de la app, el usuario puede manipular los siguientes rango
 - **Altitud de cámara**: Mín: `50`m / Máx: `2000`m (pasos de `50`m).
 - **Inclinación de cámara**: Mín: `0`° / Máx: `85`° (pasos de `5`°).
 - **Rotación orbital**: Mín: `0`° / Máx: `720`° (pasos de `10`°).
-- **Duración animación**: Mín: `15`s / Máx: `300`s (pasos de `15`s).
+- **Duración animación**: Mín: `15`s / Máx: `300`s (pasos de `5`s).
 - **Exageración terreno**: Mín: `0.5`x / Máx: `4`x (pasos de `0.1`x).
 - **Tamaño modelo 3D**: Mín: `5`m / Máx: `200`m (pasos de `5`m).
 

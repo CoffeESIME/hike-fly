@@ -15,7 +15,7 @@ export const lerpLngLat = (
   amt: number
 ): LngLatLike => {
   const startArr = LngLat.convert(start).toArray();
-  const endArr   = LngLat.convert(end).toArray();
+  const endArr = LngLat.convert(end).toArray();
   return [lerp(startArr[0], endArr[0], amt), lerp(startArr[1], endArr[1], amt)];
 };
 
@@ -36,18 +36,18 @@ export const computeCameraPosition = (
 ): LngLatLike => {
   const target = LngLat.convert(targetLngLat);
   const kmPerDegreeLongitude = 111.32 * Math.cos(target.lat * (Math.PI / 180));
-  const kmPerDegreeLatitude  = 111.32;
+  const kmPerDegreeLatitude = 111.32;
 
-  const bearingInRadian = bearing  * (Math.PI / 180);
-  const pitchInRadian   = (90 - pitch) * (Math.PI / 180);
+  const bearingInRadian = bearing * (Math.PI / 180);
+  const pitchInRadian = (90 - pitch) * (Math.PI / 180);
 
   const groundDistance = altitude / Math.tan(pitchInRadian);
 
   const offsetY = Math.cos(bearingInRadian) * groundDistance;
   const offsetX = Math.sin(bearingInRadian) * groundDistance;
 
-  const latDiff = -(offsetY / (kmPerDegreeLatitude  * 1000));
-  const lngDiff =   offsetX / (kmPerDegreeLongitude * 1000);
+  const latDiff = -(offsetY / (kmPerDegreeLatitude * 1000));
+  const lngDiff = offsetX / (kmPerDegreeLongitude * 1000);
 
   return [target.lng + lngDiff, target.lat + latDiff];
 };

@@ -62,6 +62,7 @@ export default function Home() {
   const [hideMenuOnStart, setHideMenuOnStart] = useState(false);
   const [avatarUrl,       setAvatarUrl]       = useState<string | null>(null);
   const [customModelUrl,  setCustomModelUrl]  = useState<string | null>(null);
+  const [modelScale,      setModelScaleState] = useState<number>(20);
 
   // ---- Camera settings ---------------------------------------------------
   const {
@@ -246,6 +247,14 @@ export default function Home() {
   };
 
   // ---- Camera slider definitions -----------------------------------------
+  // Handler that syncs model scale to both state and the live THREE layer
+  const handleModelScaleChange = (v: number) => {
+    setModelScaleState(v);
+    if (threeLayerRef.current) {
+      threeLayerRef.current.setModelScale(v);
+    }
+  };
+
   const cameraSliders = [
     { label: "Altitud cámara", unit: "m", value: cameraAltitude, min: 50, max: 2000, step: 50, onChange: setCameraAltitude, tip: "Altura de la cámara sobre el terreno (metros)" },
     { label: "Inclinación cámara", unit: "°", value: cameraPitch, min: 0, max: 85, step: 5, onChange: setCameraPitch, tip: "0° = vista cenital, 85° = horizonte" },
@@ -255,6 +264,11 @@ export default function Home() {
       label: "Exageración terreno", unit: "x", value: terrainExaggeration, min: 0.5, max: 4, step: 0.1,
       onChange: (v: number) => setTerrainExaggeration(v, mapRef),
       tip: "Amplifica visualmente la altura de montañas y valles",
+    },
+    {
+      label: "Tamaño modelo 3D", unit: "m", value: modelScale, min: 5, max: 200, step: 5,
+      onChange: handleModelScaleChange,
+      tip: "Tamaño del modelo 3D en metros (escala real sobre el terreno)",
     },
   ];
 

@@ -3,7 +3,7 @@
 // These are the initial values shown in the "Configuración de Vista" sliders.
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_CAMERA_PITCH = 80;          // degrees (0 = top-down, 85 = horizon)
+export const DEFAULT_CAMERA_PITCH = 60;          // degrees (0 = top-down, 85 = horizon)
 export const DEFAULT_CAMERA_ALTITUDE = 800;       // meters above terrain
 export const DEFAULT_TERRAIN_EXAGGERATION = 1.5; // multiplier; higher = more dramatic relief
 export const DEFAULT_ANIMATION_DURATION = 90;     // seconds for a full route flyby

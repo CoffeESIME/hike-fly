@@ -15,7 +15,7 @@ export class ThreeCustomLayer implements mapboxgl.CustomLayerInterface {
     // Store model position in Mercator coordinates for use in render()
     private modelMercator: mapboxgl.MercatorCoordinate | null;
     private modelBearingRad: number;
-    private modelScaleMeters: number;
+    modelScaleMeters: number;
 
     constructor(id: string) {
         this.id = id;
@@ -29,6 +29,11 @@ export class ThreeCustomLayer implements mapboxgl.CustomLayerInterface {
         this.modelMercator = null;
         this.modelBearingRad = 0;
         this.modelScaleMeters = 20; // meters
+    }
+
+    /** Update the 3D model scale (in meters) at runtime. */
+    public setModelScale(meters: number) {
+        this.modelScaleMeters = meters;
     }
 
     onAdd(map: mapboxgl.Map, gl: WebGLRenderingContext) {

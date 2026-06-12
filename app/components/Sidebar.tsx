@@ -20,6 +20,7 @@ type Props = {
   // Visibility
   isMenuVisible: boolean;
   setIsMenuVisible: React.Dispatch<React.SetStateAction<boolean>>;
+  hideWhileRouteComplete?: boolean;
   // Status
   error: string | null;
   statusMessage: string | null;
@@ -64,6 +65,7 @@ type Props = {
 // ---------------------------------------------------------------------------
 export function Sidebar({
   isMenuVisible, setIsMenuVisible,
+  hideWhileRouteComplete = false,
   error, statusMessage, isLoading, isAnimating,
   gpxFeature, isTerrainReady, handleFileChange,
   photos, setPhotos, currentDistanceKm, handleAddPhoto,
@@ -76,6 +78,8 @@ export function Sidebar({
   avatarUrl, setAvatarUrl,
   customModelUrl, setCustomModelUrl, handleModelChange,
 }: Props) {
+  // The sidebar is suppressed while the route-complete modal is shown
+  const panelVisible = isMenuVisible && !hideWhileRouteComplete;
   return (
     <>
       {/* ------------------------------------------------------------------ */}
@@ -83,7 +87,7 @@ export function Sidebar({
       {/* ------------------------------------------------------------------ */}
       <div
         style={{
-          display: isMenuVisible ? "block" : "none",
+          display: panelVisible ? "block" : "none",
           position: "absolute",
           top: "20px",
           left: "20px",
@@ -374,7 +378,7 @@ export function Sidebar({
       {/* ------------------------------------------------------------------ */}
       {/* Restore menu button (shown when sidebar is hidden)                  */}
       {/* ------------------------------------------------------------------ */}
-      {!isMenuVisible && (
+      {!isMenuVisible && !hideWhileRouteComplete && (
         <button
           onClick={() => setIsMenuVisible(true)}
           style={{ position: "absolute", top: "20px", left: "20px", padding: "10px 15px", background: "rgba(20,20,20,0.8)", backdropFilter: "blur(5px)", color: "white", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "8px", cursor: "pointer", zIndex: 10, fontWeight: "600", fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}

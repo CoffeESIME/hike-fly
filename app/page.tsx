@@ -292,6 +292,7 @@ export default function Home() {
       <Sidebar
         isMenuVisible={isMenuVisible}
         setIsMenuVisible={setIsMenuVisible}
+        hideWhileRouteComplete={showRouteComplete}
         error={displayError}
         statusMessage={statusMessage}
         isLoading={isLoading}

@@ -186,25 +186,25 @@ export function useAnimation(
       if (statsWidgetRef.current) {
         const elevProfile = elevationProfileRef.current;
         statsWidgetRef.current.innerHTML = `
-          <div style="display:flex;flex-direction:column;gap:2px">
-            <div style="font-size:0.9rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Distancia</div>
-            <div style="font-size:1.8rem;font-weight:700;color:white">
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <div style="font-size:1rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Distancia</div>
+            <div style="font-size:2.2rem;font-weight:700;color:white">
               ${(distanceAlongPath / 1000).toFixed(2)}
-              <span style="font-size:1.1rem;color:#888">/ ${(totalPathDistance / 1000).toFixed(2)} km</span>
+              <span style="font-size:1.3rem;color:#888">/ ${(totalPathDistance / 1000).toFixed(2)} km</span>
             </div>
           </div>
-          <div style="display:flex;flex-direction:column;gap:2px">
-            <div style="font-size:0.9rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Altitud</div>
-            <div style="font-size:1.8rem;font-weight:700;color:white">
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <div style="font-size:1rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Altitud</div>
+            <div style="font-size:2.2rem;font-weight:700;color:white">
               ${getElevationAtDistance(elevProfile, distanceAlongPath).toFixed(0)}
-              <span style="font-size:1.1rem;color:#888">m</span>
+              <span style="font-size:1.3rem;color:#888">m</span>
             </div>
           </div>
-          <div style="display:flex;flex-direction:column;gap:2px">
-            <div style="font-size:0.9rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Desnivel +</div>
-            <div style="font-size:1.8rem;font-weight:700;color:white">
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <div style="font-size:1rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Desnivel +</div>
+            <div style="font-size:2.2rem;font-weight:700;color:white">
               ${totalElevationGainRef.current.toFixed(0)}
-              <span style="font-size:1.1rem;color:#888">m</span>
+              <span style="font-size:1.3rem;color:#888">m</span>
             </div>
           </div>
         `;

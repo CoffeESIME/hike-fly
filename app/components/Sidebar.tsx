@@ -56,7 +56,6 @@ type Props = {
   setAvatarUrl: React.Dispatch<React.SetStateAction<string | null>>;
   // Model
   customModelUrl: string | null;
-  setCustomModelUrl: React.Dispatch<React.SetStateAction<string | null>>;
   handleModelChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 };
 
@@ -76,7 +75,7 @@ export function Sidebar({
   handleCaptureKeyframe,
   hideMenuOnStart, setHideMenuOnStart,
   avatarUrl, setAvatarUrl,
-  customModelUrl, setCustomModelUrl, handleModelChange,
+  customModelUrl, handleModelChange,
 }: Props) {
   // The sidebar is suppressed while the route-complete modal is shown
   const panelVisible = isMenuVisible && !hideWhileRouteComplete;

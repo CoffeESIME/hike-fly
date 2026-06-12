@@ -30,23 +30,26 @@ FlyBy Hiking es una aplicación web interactiva que permite a los usuarios carga
 
 ### 🗺️ Visualización de Terreno 3D Realista
 - **Terreno 3D Dinámico**: Generado a partir de los datos globales de elevación de Mapbox (DEM).
-- **Exageración del Terreno**: Configurada en **1.5** (`TERRAIN_EXAGGERATION`) para resaltar el perfil montañoso sin distorsionar la geografía real del terreno.
+- **Exageración del Terreno**: Configurada por defecto en **1.5** (`DEFAULT_TERRAIN_EXAGGERATION`) para resaltar el relieve montañoso, ajustable en tiempo real mediante el panel de control.
 - **Estilo Satélite Híbrido**: Capa de imágenes satelitales detalladas combinada con la red de caminos y calles para una mejor ubicación.
 
 ### 🎬 Animación Cinematográfica y Flyby
 - **Sobrevuelo Suave**: La cámara sigue el avance del recorrido con interpolación lineal (LERP), suavizando saltos y temblores de GPS con un factor de `0.1` (`LERP_SMOOTHING_FACTOR`).
-- **Rotación Orbital**: Durante la reproducción de 60 segundos (`ANIMATION_DURATION_SECONDS`), la cámara realiza una rotación orbital de 180° (`CAMERA_ROTATION_DEGREES`) para proporcionar perspectivas dinámicas del entorno.
-- **Cámara libre**: Configurada con inclinación de 60° (`CAMERA_PITCH`) y altitud constante de 500 metros sobre el terreno (`CAMERA_ALTITUDE_ABOVE_TERRAIN`).
+- **Rotación Orbital**: Durante la reproducción de 90 segundos por defecto (`DEFAULT_ANIMATION_DURATION`), la cámara realiza una rotación orbital de 280° (`DEFAULT_CAMERA_ROTATION`) para proporcionar perspectivas dinámicas del entorno.
+- **Cámara libre**: Configurada por defecto con una inclinación de 60° (`DEFAULT_CAMERA_PITCH`) y altitud constante de 800 metros sobre el terreno (`DEFAULT_CAMERA_ALTITUDE`).
+- **Vista Panorámica Final (Route Overview)**: Al completarse el recorrido, la cámara realiza una animación fluiva (`fitBounds`) para encuadrar la ruta completa en el mapa antes de mostrar las estadísticas finales.
 
 ### 🎮 Modelo 3D de Personaje en Ruta
-- **Personaje Animado**: El modelo 3D `.glb` (`public/models/mixtli-model.glb`) recorre la ruta de senderismo.
+- **Personaje Animado**: El modelo 3D `.glb` (`public/models/mixtli-model.glb` por defecto) recorre la ruta de senderismo.
 - **Integración WebGL**: Renderizado sobre el mapa utilizando Three.js e integrado en Mapbox mediante una capa personalizada (`ThreeCustomLayer`).
-- **Alineación de Dirección**: El personaje se orienta y rota dinámicamente según la dirección del trayecto para mirar siempre hacia el frente del camino. Está elevado a 35 metros sobre el nivel del suelo para evitar colisiones con el terreno.
+- **Alineación de Dirección**: El personaje se orienta y rota dinámicamente según la dirección del trayecto para mirar siempre hacia el frente del camino. Está elevado a 35 metros sobre el nivel del suelo (`ALTITUDE_OFFSET`) para evitar colisiones con el terreno.
+- **Tamaño del Modelo Ajustable**: Configurable dinámicamente mediante el slider "Tamaño modelo 3D" en el panel lateral (rango de 5m a 200m, con valor base de 20m).
 
-### 📸 Sistema de Fotos y Hitos
-- **Puntos Kilométricos**: Permite asociar fotografías subidas por el usuario a puntos específicos de la ruta en función del kilometraje.
-- **Visualización Modal Inteligente**: Al llegar al hito de la foto, la animación se pausa automáticamente y muestra una ventana emergente en pantalla por 3 segundos con una barra de progreso circular o lineal. Tras finalizar, la animación se reanuda sola.
-- **Gestión de Fotos**: Opción de habilitar/deshabilitar fotos de forma individual y borrar hitos mostrados en la barra lateral.
+### 📸 Sistema de Hitos Multimedia (Pantalla Completa)
+- **Puntos Kilométricos**: Permite asociar fotos y videos cargados por el usuario a puntos específicos de la ruta en función del kilometraje.
+- **Visualización en Pantalla Completa**: Al llegar a un waypoint con multimedia, la animación se pausa automáticamente y muestra el contenido (fotos o videos de hasta 10 segundos) ocupando la mayor parte del espacio de pantalla disponible.
+- **Diseño Inmersivo**: Cuenta con un ajuste de contenido (`objectFit: contain`) para no recortar la imagen/video, un encabezado flotante con degradado premium y una barra de progreso que indica el tiempo restante (3 segundos para fotos; los videos se reproducen por completo). Tras finalizar, el recorrido se reanuda automáticamente.
+- **Gestión de Contenido**: Opción de habilitar/deshabilitar fotos y videos de forma individual y borrar hitos mostrados en la barra lateral.
 
 ### 🎬 Sistema de Keyframes de Cámara
 - **Perspectivas Personalizadas**: Puedes pausar el recorrido, rotar/trasladar libremente la cámara del mapa a tu ángulo favorito, y guardar esa vista como un keyframe.
@@ -54,14 +57,16 @@ FlyBy Hiking es una aplicación web interactiva que permite a los usuarios carga
 - **Gestión de Keyframes**: Botones para limpiar la lista y empezar de cero. Los keyframes se borran automáticamente al cargar un nuevo archivo GPX para evitar inconsistencias.
 
 ### 👤 Avatar de Perfil Flotante
-- **Carga de Avatar**: Permite al usuario subir una foto de perfil desde el panel lateral.
-- **Diseño Premium**: El avatar se muestra como un círculo flotante estilizado de 90px en la esquina superior derecha con bordes difuminados y una animación de entrada de rebote (`avatarPop`).
+- **Carga de Avatar**: Permite al usuario subir una foto de perfil directamente desde la pestaña "Avatar" en la barra lateral.
+- **Diseño Premium**: El avatar se muestra como un círculo flotante ampliado de 140px en la esquina superior derecha con bordes pulidos en blanco y azul, sombra tridimensional y una animación de entrada de rebote suave (`avatarPop`).
 
-### 📊 HUD y Panel de Control Premium
-- **Widget de Estadísticas**: Panel translúcido (con efecto Glassmorphism) en la parte inferior central que muestra distancia recorrida (km), altitud actual (msnm) y ganancia acumulada de elevación (+) en tiempo real.
+### 📊 HUD, Resumen y Panel de Control Premium
+- **Widget de Estadísticas Ampliado**: Panel translúcido inferior (Glassmorphism) con padding y fuentes optimizadas para mostrar en tiempo real la distancia recorrida (km), la altitud actual (m) y la ganancia de elevación acumulada (m).
+- **Modal de Ruta Completada**: Al finalizar la simulación, aparece un elegante modal translúcido central que presenta los datos resumidos del GPX: Distancia Total (km), Desnivel acumulado (+ m), Altitud Máxima (m) y Altitud Mínima (m).
+- **Auto-ocultar Interfaz**: El menú lateral y el botón de hamburguesa flotante se ocultan de forma automática mientras se muestra el modal de ruta completada para garantizar una visualización limpia y despejada.
 - **Ocultar Menú en Reproducción**: Opción para esconder el menú lateral automáticamente cuando la animación inicia.
 - **Botón Flotante de Acceso**: Botón flotante `☰ MOSTRAR MENÚ` que aparece en la parte superior izquierda cuando la interfaz está oculta para regresar a los controles en cualquier momento.
-- **Control de Pausa/Reproducción robusto**: Corregidos fallos de desfase de tiempos al pausar y reanudar que provocaban saltos bruscos hacia adelante.
+- **Control de Pausa/Reproducción robusto**: Sincronización precisa de los tiempos de reproducción sin saltos bruscos al pausar y reanudar la animación.
 
 ---
 
@@ -104,35 +109,57 @@ Abre tu navegador en `http://localhost:3000` para ver la aplicación.
 
 ## ⚙️ Parámetros de Configuración
 
-Puedes personalizar diversos aspectos de la animación y la cámara editando las constantes en los archivos principales de código:
+Puedes personalizar diversos aspectos de la animación y la cámara editando las constantes preestablecidas y las variables de entorno de la aplicación:
 
-### En `app/page.tsx`:
+### Configuración Centralizada en `app/constants/defaults.ts`
+Todas las constantes de inicialización y comportamiento por defecto se encuentran en este archivo:
+
 | Constante | Valor por Defecto | Descripción |
 |-----------|-------------------|-------------|
-| `CAMERA_PITCH` | `60` | Inclinación vertical de la cámara de Mapbox (grados). |
-| `CAMERA_ALTITUDE_ABOVE_TERRAIN` | `500` | Altura constante de la cámara sobre el terreno (metros). |
-| `TERRAIN_EXAGGERATION` | `1.5` | Factor de exageración de altura de montañas y relieve. |
-| `ANIMATION_DURATION_SECONDS` | `60` | Duración de la reproducción del trayecto (segundos). |
-| `CAMERA_ROTATION_DEGREES` | `180` | Ángulo de rotación que girará la cámara horizontalmente a lo largo de la animación. |
-| `LERP_SMOOTHING_FACTOR` | `0.1` | Suavizado del movimiento e inclinación (0 a 1). Valores más bajos son más suaves. |
+| `DEFAULT_CAMERA_PITCH` | `60` | Inclinación vertical inicial de la cámara de Mapbox (grados). |
+| `DEFAULT_CAMERA_ALTITUDE` | `800` | Altura inicial de la cámara sobre el nivel del terreno (metros). |
+| `DEFAULT_TERRAIN_EXAGGERATION` | `1.5` | Factor inicial de exageración de relieve para montañas y valles. |
+| `DEFAULT_ANIMATION_DURATION` | `90` | Duración del sobrevuelo completo de la ruta (segundos). |
+| `DEFAULT_CAMERA_ROTATION` | `280` | Ángulo horizontal acumulado que rota la cámara orbitalmente durante la animación (grados). |
+| `LERP_SMOOTHING_FACTOR` | `0.1` | Factor de suavizado (0 a 1) para el movimiento y amortiguación de temblores GPS. |
+| `PHOTO_TRIGGER_DISTANCE_M` | `20` | Rango de proximidad (metros) en la ruta que activa el waypoint multimedia de fotos y videos. |
 
-### En `app/utils/ThreeCustomLayer.ts`:
-| Variable | Valor por Defecto | Descripción |
+### Configuración del Personaje 3D en `app/utils/ThreeCustomLayer.ts`
+Configuraciones específicas del renderizado 3D con Three.js:
+
+| Constante / Atributo | Valor por Defecto | Descripción |
 |-----------|-------------------|-------------|
-| `modelAltitude` | `35` | Altura del modelo 3D sobre la superficie del terreno para evitar colisión con objetos o relieve. |
+| `ALTITUDE_OFFSET` | `35` | Altura fija en metros sobre el terreno a la que se suspende el personaje para evitar colisionar con relieve o construcciones de Mapbox. |
+| `modelScaleMeters` | `20` | Tamaño/escala inicial del modelo 3D en metros antes de modificarse dinámicamente. |
 
-### 🛠️ Personalización del Modelo 3D (Cualquier Modelo .GLB)
+### Controles Interactivos en Tiempo Real (Panel Lateral)
+Durante la ejecución de la app, el usuario puede manipular los siguientes rangos de parámetros desde el sidebar:
+- **Altitud de cámara**: Mín: `50`m / Máx: `2000`m (pasos de `50`m).
+- **Inclinación de cámara**: Mín: `0`° / Máx: `85`° (pasos de `5`°).
+- **Rotación orbital**: Mín: `0`° / Máx: `720`° (pasos de `10`°).
+- **Duración animación**: Mín: `15`s / Máx: `300`s (pasos de `15`s).
+- **Exageración terreno**: Mín: `0.5`x / Máx: `4`x (pasos de `0.1`x).
+- **Tamaño modelo 3D**: Mín: `5`m / Máx: `200`m (pasos de `5`m).
 
-Es posible utilizar prácticamente **cualquier modelo 3D** (un excursionista, un avatar, un coche, un dron, etc.) en formato `.glb`. Tienes dos formas sencillas de hacerlo:
+---
 
-1. **Reemplazo Directo (Sin cambiar código)**:
+## 🛠️ Personalización del Modelo 3D
+
+Es posible utilizar prácticamente **cualquier modelo 3D** en formato `.glb`/`.gltf`. Tienes tres formas de hacerlo:
+
+1. **Subida Dinámica desde la Interfaz (Recomendada)**:
+   * Abre la barra lateral.
+   * Haz clic en **"Subir modelo 3D"**.
+   * Selecciona cualquier archivo `.glb` o `.gltf` desde tu dispositivo. El personaje en la simulación se actualizará en tiempo real de forma instantánea.
+
+2. **Reemplazo Directo de Archivo**:
    * Consigue tu modelo en formato `.glb`.
-   * Renómbralo como `mixtli-model.glb`.
-   * Reemplaza el archivo existente en `public/models/mixtli-model.glb`.
+   * Renómbralo exactamente como `mixtli-model.glb`.
+   * Reemplázalo en el directorio local: `public/models/mixtli-model.glb`.
 
-2. **Personalizando la Ruta en el Código**:
+3. **Personalizando la Ruta de Carga en el Código**:
    * Guarda tu archivo `.glb` dentro de la carpeta `public/models/` (por ejemplo, `public/models/mi-excursionista.glb`).
-   * Abre [ThreeCustomLayer.ts](file:///c:/Users/USER/Desktop/Proyectos/senderismoProjects/flyby-hiking/mapbox-gpx-viewer/app/utils/ThreeCustomLayer.ts) y edita la ruta en la función `loadModel()` (alrededor de la línea 58):
+   * Abre [ThreeCustomLayer.ts](file:///c:/Users/USER/Desktop/Proyectos/senderismoProjects/flyby-hiking/mapbox-gpx-viewer/app/utils/ThreeCustomLayer.ts) y edita la ruta del recurso dentro de la función `loadModel()` (alrededor de la línea 58):
      ```typescript
      loader.load(
          "/models/mi-excursionista.glb",

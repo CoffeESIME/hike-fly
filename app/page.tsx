@@ -319,7 +319,6 @@ export default function Home() {
         avatarUrl={avatarUrl}
         setAvatarUrl={setAvatarUrl}
         customModelUrl={customModelUrl}
-        setCustomModelUrl={setCustomModelUrl}
         handleModelChange={handleModelChange}
       />
 

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Map, LngLat, LngLatLike, MercatorCoordinate } from "mapbox-gl";
+import { Map, LngLat, LngLatLike, MercatorCoordinate, LngLatBounds } from "mapbox-gl";
 import * as THREE from "three";
 import * as turf from "@turf/turf";
 import { PhotoMarker, Keyframe, ElevationPoint } from "../types";
@@ -64,6 +64,8 @@ export function useAnimation(
   // UI
   hideMenuOnStart: boolean,
   setIsMenuVisible: React.Dispatch<React.SetStateAction<boolean>>,
+  // Route complete callback
+  onRouteComplete: () => void,
 ): UseAnimationReturn {
   const [isAnimating,        setIsAnimating]        = useState(false);
   const [activeKeyframeIndex, setActiveKeyframeIndex] = useState(-1);
@@ -289,9 +291,38 @@ export function useAnimation(
         animationStartTimeRef.current     = null;
         previousSmoothedTargetRef.current = null;
         setIsAnimating(false);
-        setStatusMessage("Animación completada.");
+        setStatusMessage("Vista general de la ruta...");
         toggleMapInteractivity(map, true);
-        setIsMenuVisible(true);
+
+        // ── Route overview animation ──────────────────────────────────────────
+        // Build bounding box from all route coordinates
+        if (gpxFeature?.geometry?.coordinates?.length) {
+          const coords = gpxFeature.geometry.coordinates as [number, number][];
+          const bounds = coords.reduce(
+            (b, c) => b.extend(c as [number, number]),
+            new LngLatBounds(coords[0], coords[0])
+          );
+
+          // Zoom out to show the full route with a smooth flyTo
+          map.fitBounds(bounds, {
+            padding: { top: 80, bottom: 80, left: 80, right: 80 },
+            pitch: 35,
+            bearing: 0,
+            duration: 3500,
+            easing: (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t, // ease-in-out
+          });
+
+          // After overview animation settles, show the completion overlay
+          setTimeout(() => {
+            setStatusMessage("Animación completada.");
+            setIsMenuVisible(true);
+            onRouteComplete();
+          }, 3800);
+        } else {
+          setStatusMessage("Animación completada.");
+          setIsMenuVisible(true);
+          onRouteComplete();
+        }
       }
     },
     [
@@ -300,7 +331,7 @@ export function useAnimation(
       cameraPitch, cameraAltitude, cameraRotation,
       mapRef, threeLayerRef, isPausedForPhotoRef,
       setPhotos, setActivePhoto, setSlideshowQueue, setCurrentSlideIndex,
-      setIsAnimating, setStatusMessage, setIsMenuVisible,
+      setIsAnimating, setStatusMessage, setIsMenuVisible, onRouteComplete,
       statsWidgetRef, elevationProfileRef, totalElevationGainRef,
     ]
   );

@@ -20,10 +20,11 @@ import { usePhotoMarkers }  from "./hooks/usePhotoMarkers";
 import { useCameraSettings } from "./hooks/useCameraSettings";
 
 // Components
-import { Sidebar }       from "./components/Sidebar";
-import { PhotoOverlay }  from "./components/PhotoOverlay";
-import { AvatarBadge }   from "./components/AvatarBadge";
-import { StatsWidget }   from "./components/StatsWidget";
+import { Sidebar }              from "./components/Sidebar";
+import { PhotoOverlay }         from "./components/PhotoOverlay";
+import { AvatarBadge }         from "./components/AvatarBadge";
+import { StatsWidget }         from "./components/StatsWidget";
+import { RouteCompleteOverlay } from "./components/RouteCompleteOverlay";
 
 // Utilities
 import { buildElevationProfile, calculateElevationGain } from "./utils/gpxUtils";
@@ -60,9 +61,10 @@ export default function Home() {
   // ---- UI ----------------------------------------------------------------
   const [isMenuVisible,   setIsMenuVisible]   = useState(true);
   const [hideMenuOnStart, setHideMenuOnStart] = useState(false);
-  const [avatarUrl,       setAvatarUrl]       = useState<string | null>(null);
-  const [customModelUrl,  setCustomModelUrl]  = useState<string | null>(null);
-  const [modelScale,      setModelScaleState] = useState<number>(20);
+  const [avatarUrl,           setAvatarUrl]           = useState<string | null>(null);
+  const [customModelUrl,      setCustomModelUrl]      = useState<string | null>(null);
+  const [modelScale,          setModelScaleState]     = useState<number>(20);
+  const [showRouteComplete,   setShowRouteComplete]   = useState(false);
 
   // ---- Camera settings ---------------------------------------------------
   const {
@@ -107,6 +109,7 @@ export default function Home() {
     keyframes, useKeyframes, setKeyframes, setUseKeyframes,
     cameraPitch, cameraAltitude, cameraRotation, animationDuration,
     hideMenuOnStart, setIsMenuVisible,
+    () => setShowRouteComplete(true),
   ) as ReturnType<typeof useAnimation> & {
     setActiveKeyframeIndex: React.Dispatch<React.SetStateAction<number>>;
   };
@@ -126,6 +129,7 @@ export default function Home() {
     setPhotos([]);
     setKeyframes([]);
     setUseKeyframes(false);
+    setShowRouteComplete(false);
 
     const file = event.target.files?.[0];
     if (!file) return;
@@ -275,6 +279,10 @@ export default function Home() {
   // Suppress unused-var warnings for turf helpers only imported for tree-shaking
   void turfPoint; void turfDistance;
 
+  const elevations = elevationProfileRef.current.map((p) => p.ele);
+  const maxAltitude = elevations.length > 0 ? Math.max(...elevations) : 0;
+  const minAltitude = elevations.length > 0 ? Math.min(...elevations) : 0;
+
   // ---- Render ------------------------------------------------------------
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", fontFamily: "sans-serif" }}>
@@ -296,7 +304,7 @@ export default function Home() {
         currentDistanceKm={currentDistanceRef.current / 1000}
         handleAddPhoto={handleAddPhoto}
         handleToggleAnimation={handleToggleAnimation}
-        handleResetAnimation={handleResetAnimation}
+        handleResetAnimation={() => { setShowRouteComplete(false); handleResetAnimation(); }}
         sliders={cameraSliders}
         keyframes={keyframes}
         setKeyframes={setKeyframes}
@@ -325,6 +333,17 @@ export default function Home() {
 
       {/* Photo slideshow overlay */}
       {activePhoto && <PhotoOverlay photo={activePhoto} onClose={closePhotoOverlay} onAdvance={advanceSlideshow} />}
+
+      {/* Route complete overlay */}
+      {showRouteComplete && (
+        <RouteCompleteOverlay
+          totalDistanceKm={totalPathDistance / 1000}
+          totalElevationGain={totalElevationGainRef.current}
+          maxAltitude={maxAltitude}
+          minAltitude={minAltitude}
+          onClose={() => setShowRouteComplete(false)}
+        />
+      )}
 
       {/* Global keyframe animations */}
       <style>{`

@@ -85,7 +85,7 @@ Para ejecutar este proyecto en tu entorno local necesitas:
 ### 1. Clonar el repositorio y entrar al proyecto
 ```bash
 git clone https://github.com/CoffeESIME/hike-fly.git
-cd hike-fly/mapbox-gpx-viewer
+cd hike-fly
 ```
 
 ### 2. Instalar dependencias

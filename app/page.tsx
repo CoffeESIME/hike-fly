@@ -63,6 +63,7 @@ export default function Home() {
   const [hideMenuOnStart, setHideMenuOnStart] = useState(false);
   const [avatarUrl,           setAvatarUrl]           = useState<string | null>(null);
   const [customModelUrl,      setCustomModelUrl]      = useState<string | null>(null);
+  const [modelType,           setModelType]           = useState<"mixtli" | "corvid" | "custom">("mixtli");
   const [modelScale,          setModelScaleState]     = useState<number>(20);
   const [showRouteComplete,   setShowRouteComplete]   = useState(false);
 
@@ -232,6 +233,23 @@ export default function Home() {
     event.target.value = "";
   };
 
+  // ---- handleModelTypeChange ---------------------------------------------
+  const handleModelTypeChange = (type: "mixtli" | "corvid" | "custom") => {
+    setModelType(type);
+    if (threeLayerRef.current) {
+      if (type === "mixtli") {
+        threeLayerRef.current.changeModel("/models/mixtli-model.glb");
+        setStatusMessage("Modelo 3D cambiado a Mixtli.");
+      } else if (type === "corvid") {
+        threeLayerRef.current.changeModel("/models/corvid.glb");
+        setStatusMessage("Modelo 3D cambiado a Corvid.");
+      } else if (type === "custom" && customModelUrl) {
+        threeLayerRef.current.changeModel(customModelUrl);
+        setStatusMessage("Modelo 3D cambiado a Personalizado.");
+      }
+    }
+  };
+
   // ---- handleModelChange -------------------------------------------------
   const handleModelChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -243,9 +261,10 @@ export default function Home() {
 
     const url = URL.createObjectURL(file);
     setCustomModelUrl(url);
+    setModelType("custom");
     if (threeLayerRef.current) {
       threeLayerRef.current.changeModel(url);
-      setStatusMessage("Modelo 3D actualizado.");
+      setStatusMessage("Modelo 3D personalizado actualizado.");
     }
     event.target.value = "";
   };
@@ -320,6 +339,8 @@ export default function Home() {
         setAvatarUrl={setAvatarUrl}
         customModelUrl={customModelUrl}
         handleModelChange={handleModelChange}
+        modelType={modelType}
+        handleModelTypeChange={handleModelTypeChange}
       />
 
       {/* Avatar badge (top-right) */}

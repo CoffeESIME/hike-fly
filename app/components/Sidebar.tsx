@@ -57,6 +57,8 @@ type Props = {
   // Model
   customModelUrl: string | null;
   handleModelChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  modelType: "mixtli" | "corvid" | "custom";
+  handleModelTypeChange: (type: "mixtli" | "corvid" | "custom") => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -76,6 +78,7 @@ export function Sidebar({
   hideMenuOnStart, setHideMenuOnStart,
   avatarUrl, setAvatarUrl,
   customModelUrl, handleModelChange,
+  modelType, handleModelTypeChange,
 }: Props) {
   // The sidebar is suppressed while the route-complete modal is shown
   const panelVisible = isMenuVisible && !hideWhileRouteComplete;
@@ -355,21 +358,38 @@ export function Sidebar({
             )}
           </div>
 
-          {/* Custom Model upload */}
+          {/* Model Selection */}
           <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
             <label style={{ display: "block", marginBottom: "8px", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "1px", color: "#888", fontWeight: "600" }}>
-              Modelo 3D (.glb, .gltf)
+              Modelo 3D
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "rgba(255,255,255,0.05)", border: "1px dashed rgba(255,255,255,0.2)", borderRadius: "8px", cursor: "pointer", fontSize: "0.8rem", color: "#ccc" }}>
-              <span style={{ fontSize: "1.5rem" }}>🧊</span>
-              <span>{customModelUrl ? "Cambiar modelo 3D" : "Subir modelo 3D"}</span>
-              <input
-                type="file"
-                accept=".glb,.gltf"
-                style={{ display: "none" }}
-                onChange={handleModelChange}
-              />
-            </label>
+            <div style={{ display: "flex", gap: "10px", marginBottom: "10px", fontSize: "0.8rem", color: "#ccc" }}>
+              <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                <input type="radio" name="modelType" value="mixtli" checked={modelType === "mixtli"} onChange={() => handleModelTypeChange("mixtli")} style={{ cursor: "pointer", accentColor: "#00c6ff" }} />
+                Mixtli
+              </label>
+              <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                <input type="radio" name="modelType" value="corvid" checked={modelType === "corvid"} onChange={() => handleModelTypeChange("corvid")} style={{ cursor: "pointer", accentColor: "#00c6ff" }} />
+                Corvid
+              </label>
+              <label style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                <input type="radio" name="modelType" value="custom" checked={modelType === "custom"} onChange={() => handleModelTypeChange("custom")} style={{ cursor: "pointer", accentColor: "#00c6ff" }} />
+                Personalizado
+              </label>
+            </div>
+
+            {modelType === "custom" && (
+              <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "rgba(255,255,255,0.05)", border: "1px dashed rgba(255,255,255,0.2)", borderRadius: "8px", cursor: "pointer", fontSize: "0.8rem", color: "#ccc" }}>
+                <span style={{ fontSize: "1.5rem" }}>🧊</span>
+                <span>{customModelUrl ? "Cambiar modelo 3D (.glb, .gltf)" : "Subir modelo 3D (.glb, .gltf)"}</span>
+                <input
+                  type="file"
+                  accept=".glb,.gltf"
+                  style={{ display: "none" }}
+                  onChange={handleModelChange}
+                />
+              </label>
+            )}
           </div>
         </div>
       </div>

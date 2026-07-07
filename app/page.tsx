@@ -63,7 +63,7 @@ export default function Home() {
   const [hideMenuOnStart, setHideMenuOnStart] = useState(false);
   const [avatarUrl,           setAvatarUrl]           = useState<string | null>(null);
   const [customModelUrl,      setCustomModelUrl]      = useState<string | null>(null);
-  const [modelType,           setModelType]           = useState<"mixtli" | "corvid" | "custom">("mixtli");
+  const [modelType,           setModelType]           = useState<"mixtli" | "corvid" | "custom">("corvid");
   const [modelScale,          setModelScaleState]     = useState<number>(20);
   const [showRouteComplete,   setShowRouteComplete]   = useState(false);
 
@@ -121,8 +121,8 @@ export default function Home() {
   // ---- Active error (map init error takes precedence) --------------------
   const displayError = error || mapError;
 
-  // ---- handleFileChange --------------------------------------------------
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+  // ---- GPX Loading Helpers -----------------------------------------------
+  const resetGpxState = () => {
     setError(null);
     setStatusMessage(null);
     setGpxData(null);
@@ -131,6 +131,33 @@ export default function Home() {
     setKeyframes([]);
     setUseKeyframes(false);
     setShowRouteComplete(false);
+  };
+
+  const loadGpxString = (gpxContent: string) => {
+    try {
+      const parser     = new DOMParser();
+      const doc        = parser.parseFromString(gpxContent, "application/xml");
+      const geojsonData = gpx(doc);
+      setGpxData(geojsonData);
+
+      if (geojsonData.features?.length > 0) {
+        const feature = geojsonData.features[0] as GeoJSON.Feature<GeoJSON.LineString>;
+        totalElevationGainRef.current = calculateElevationGain(feature);
+        elevationProfileRef.current   = buildElevationProfile(feature);
+      }
+
+      setStatusMessage("Archivo GPX leído. Procesando...");
+    } catch (err) {
+      console.error("Error leyendo archivo GPX:", err);
+      setError(`Error leyendo GPX: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ---- handleFileChange --------------------------------------------------
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    resetGpxState();
 
     const file = event.target.files?.[0];
     if (!file) return;
@@ -145,30 +172,27 @@ export default function Home() {
 
     const reader = new FileReader();
     reader.onload = (e: ProgressEvent<FileReader>) => {
-      try {
-        const gpxContent = e.target?.result as string;
-        const parser     = new DOMParser();
-        const doc        = parser.parseFromString(gpxContent, "application/xml");
-        const geojsonData = gpx(doc);
-        setGpxData(geojsonData);
-
-        // Pre-build elevation profile so it's ready before the first animation frame
-        if (geojsonData.features?.length > 0) {
-          const feature = geojsonData.features[0] as GeoJSON.Feature<GeoJSON.LineString>;
-          totalElevationGainRef.current = calculateElevationGain(feature);
-          elevationProfileRef.current   = buildElevationProfile(feature);
-        }
-
-        setStatusMessage("Archivo GPX leído. Procesando...");
-      } catch (err) {
-        console.error("Error leyendo archivo GPX:", err);
-        setError(`Error leyendo GPX: ${err instanceof Error ? err.message : String(err)}`);
-      } finally {
-        setIsLoading(false);
-      }
+      const gpxContent = e.target?.result as string;
+      loadGpxString(gpxContent);
     };
     reader.onerror = () => { setIsLoading(false); setError("Error de lectura en el archivo GPX."); };
     reader.readAsText(file);
+  };
+
+  // ---- handleLoadDefaultGpx ----------------------------------------------
+  const handleLoadDefaultGpx = async () => {
+    resetGpxState();
+    setIsLoading(true);
+    setStatusMessage("Cargando ruta de ejemplo...");
+    try {
+      const res = await fetch("/gpx/cascada-congelada-y-laguna-de-nahualac-sin-pasar-por-nexcola.gpx");
+      if (!res.ok) throw new Error("No se pudo cargar la ruta de ejemplo.");
+      const text = await res.text();
+      loadGpxString(text);
+    } catch (err) {
+      setIsLoading(false);
+      setError(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   // ---- handleAddPhoto ----------------------------------------------------
@@ -319,6 +343,7 @@ export default function Home() {
         gpxFeature={gpxFeature}
         isTerrainReady={isTerrainReady}
         handleFileChange={handleFileChange}
+        handleLoadDefaultGpx={handleLoadDefaultGpx}
         photos={photos}
         setPhotos={setPhotos}
         currentDistanceKm={currentDistanceRef.current / 1000}

@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import { PhotoMarker, Keyframe } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -30,6 +30,7 @@ type Props = {
   gpxFeature: unknown;
   isTerrainReady: boolean;
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleLoadDefaultGpx: () => void;
   // Photos
   photos: PhotoMarker[];
   setPhotos: React.Dispatch<React.SetStateAction<PhotoMarker[]>>;
@@ -68,7 +69,7 @@ export function Sidebar({
   isMenuVisible, setIsMenuVisible,
   hideWhileRouteComplete = false,
   error, statusMessage, isLoading, isAnimating,
-  gpxFeature, isTerrainReady, handleFileChange,
+  gpxFeature, isTerrainReady, handleFileChange, handleLoadDefaultGpx,
   photos, setPhotos, currentDistanceKm, handleAddPhoto,
   handleToggleAnimation, handleResetAnimation,
   sliders,
@@ -80,6 +81,8 @@ export function Sidebar({
   customModelUrl, handleModelChange,
   modelType, handleModelTypeChange,
 }: Props) {
+  const [showInfo, setShowInfo] = useState(false);
+
   // The sidebar is suppressed while the route-complete modal is shown
   const panelVisible = isMenuVisible && !hideWhileRouteComplete;
   return (
@@ -108,9 +111,54 @@ export function Sidebar({
         }}
       >
         {/* Title */}
-        <h2 style={{ margin: "0 0 20px 0", fontSize: "1.5rem", fontWeight: "700", background: "linear-gradient(45deg, #0070f3, #00c6ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-          FlyBy 3D
+        <h2 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 0 20px 0", fontSize: "1.5rem", fontWeight: "700" }}>
+          <span style={{ background: "linear-gradient(45deg, #0070f3, #00c6ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>FlyBy 3D</span>
+          <button onClick={() => setShowInfo(true)} style={{ background: "transparent", border: "none", color: "#ccc", fontSize: "1.2rem", cursor: "pointer" }} title="Información">ℹ️</button>
         </h2>
+
+        {/* Info Modal */}
+        {showInfo && (
+          <div style={{
+            position: "fixed",
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.7)",
+            zIndex: 100,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontFamily: "'Inter', sans-serif"
+          }}>
+            <div style={{
+              background: "#1a1a1a",
+              padding: "20px",
+              borderRadius: "12px",
+              maxWidth: "400px",
+              color: "#fff",
+              border: "1px solid rgba(255,255,255,0.1)",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
+            }}>
+              <h3 style={{ marginTop: 0, color: "#00c6ff" }}>Acerca de FlyBy 3D</h3>
+              <p style={{ fontSize: "0.9rem", lineHeight: "1.5", color: "#ccc" }}>
+                Esta aplicación te permite visualizar y animar rutas GPX en un entorno 3D de alta calidad.
+              </p>
+              <ul style={{ fontSize: "0.85rem", color: "#aaa", paddingLeft: "20px", lineHeight: "1.6" }}>
+                <li><strong>Cargar ruta:</strong> Puedes subir tu propio archivo GPX o cargar una ruta de ejemplo.</li>
+                <li><strong>Puntos de interés:</strong> Añade fotos y videos (hasta 10s) en puntos específicos de la ruta.</li>
+                <li><strong>Personalización:</strong> Cambia el modelo 3D (Mixtli, Corvid o el tuyo propio) y sube tu avatar.</li>
+                <li><strong>Cámara:</strong> Ajusta la altitud, inclinación, exageración de terreno y duración de la animación.</li>
+                <li><strong>Ocultar Menú:</strong> Activa "Ocultar menú al iniciar" en la configuración para tener una vista limpia durante el recorrido.</li>
+              </ul>
+              <div style={{ background: "rgba(255, 165, 0, 0.1)", borderLeft: "4px solid orange", padding: "10px", marginTop: "15px", fontSize: "0.85rem", color: "#ffd085" }}>
+                <strong>💡 Recomendación para grabar:</strong> La aplicación no cuenta con funcionalidad nativa para grabar el recorrido. Te sugerimos activar la opción de ocultar el menú y utilizar un software de grabación de pantalla (como OBS Studio o la herramienta integrada de tu sistema) para capturar la animación.
+              </div>
+              <div style={{ textAlign: "right", marginTop: "20px" }}>
+                <button onClick={() => setShowInfo(false)} style={{ background: "#0070f3", color: "white", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Status dot + message */}
         <div style={{ marginBottom: "20px", padding: "10px", background: "rgba(255,255,255,0.05)", borderRadius: "8px", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -131,8 +179,15 @@ export function Sidebar({
               accept=".gpx"
               onChange={handleFileChange}
               disabled={isLoading || isAnimating}
-              style={{ width: "100%", padding: "8px", background: "rgba(0,0,0,0.2)", border: "1px solid #333", borderRadius: "6px", color: "#fff", fontSize: "0.9rem" }}
+              style={{ width: "100%", padding: "8px", background: "rgba(0,0,0,0.2)", border: "1px solid #333", borderRadius: "6px", color: "#fff", fontSize: "0.9rem", marginBottom: "8px" }}
             />
+            <button
+              onClick={handleLoadDefaultGpx}
+              disabled={isLoading || isAnimating}
+              style={{ width: "100%", padding: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", color: "#00c6ff", fontSize: "0.8rem", cursor: (isLoading || isAnimating) ? "not-allowed" : "pointer", fontWeight: "600", transition: "background 0.2s" }}
+            >
+              🚀 Cargar ruta de ejemplo
+            </button>
           </div>
 
           {/* -------------------------------------------------------------- */}

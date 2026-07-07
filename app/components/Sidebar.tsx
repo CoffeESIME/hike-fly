@@ -146,7 +146,7 @@ export function Sidebar({
                 <li><strong>Puntos de interés:</strong> Añade fotos y videos (hasta 10s) en puntos específicos de la ruta.</li>
                 <li><strong>Personalización:</strong> Cambia el modelo 3D (Mixtli, Corvid o el tuyo propio) y sube tu avatar.</li>
                 <li><strong>Cámara:</strong> Ajusta la altitud, inclinación, exageración de terreno y duración de la animación.</li>
-                <li><strong>Ocultar Menú:</strong> Activa "Ocultar menú al iniciar" en la configuración para tener una vista limpia durante el recorrido.</li>
+                <li><strong>Ocultar Menú:</strong> Activa &quot;Ocultar menú al iniciar&quot; en la configuración para tener una vista limpia durante el recorrido.</li>
               </ul>
               <div style={{ background: "rgba(255, 165, 0, 0.1)", borderLeft: "4px solid orange", padding: "10px", marginTop: "15px", fontSize: "0.85rem", color: "#ffd085" }}>
                 <strong>💡 Recomendación para grabar:</strong> La aplicación no cuenta con funcionalidad nativa para grabar el recorrido. Te sugerimos activar la opción de ocultar el menú y utilizar un software de grabación de pantalla (como OBS Studio o la herramienta integrada de tu sistema) para capturar la animación.

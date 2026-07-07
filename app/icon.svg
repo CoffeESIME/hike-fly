@@ -1,0 +1,11 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="112" fill="#022c22" />
+  
+  <!-- Small Mountain -->
+  <path d="M360 200 L226 400 H494 Z" fill="#059669" />
+  <path d="M360 200 L316 266 L336 280 L360 260 L384 290 L404 266 Z" fill="#e2e8f0" />
+  
+  <!-- Big Mountain (in front) -->
+  <path d="M200 100 L20 400 H380 Z" fill="#10b981" />
+  <path d="M200 100 L140 200 L170 225 L200 195 L230 235 L260 200 Z" fill="white" />
+</svg>

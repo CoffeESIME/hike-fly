@@ -64,6 +64,7 @@ export function useAnimation(
   // UI
   hideMenuOnStart: boolean,
   setIsMenuVisible: React.Dispatch<React.SetStateAction<boolean>>,
+  onlyDistance: boolean,
   // Route complete callback
   onRouteComplete: () => void,
 ): UseAnimationReturn {
@@ -83,6 +84,43 @@ export function useAnimation(
 
   // Always-fresh ref to the animationStep closure (avoids stale-closure bugs in rAF)
   const animationStepRef = useRef<(timestamp: number) => void>(() => { });
+
+  const updateStatsWidget = useCallback(
+    (distanceAlongPath: number) => {
+      if (!statsWidgetRef.current) return;
+      const elevProfile = elevationProfileRef.current;
+      const elevationHtml = !onlyDistance
+        ? `
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <div style="font-size:1rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Altitud</div>
+            <div style="font-size:2.2rem;font-weight:700;color:white">
+              ${getElevationAtDistance(elevProfile, distanceAlongPath).toFixed(0)}
+              <span style="font-size:1.3rem;color:#888">m</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <div style="font-size:1rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Desnivel +</div>
+            <div style="font-size:2.2rem;font-weight:700;color:white">
+              ${totalElevationGainRef.current.toFixed(0)}
+              <span style="font-size:1.3rem;color:#888">m</span>
+            </div>
+          </div>
+        `
+        : "";
+
+      statsWidgetRef.current.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <div style="font-size:1rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Distancia</div>
+          <div style="font-size:2.2rem;font-weight:700;color:white">
+            ${(distanceAlongPath / 1000).toFixed(2)}
+            <span style="font-size:1.3rem;color:#888">/ ${(totalPathDistance / 1000).toFixed(2)} km</span>
+          </div>
+        </div>
+        ${elevationHtml}
+      `;
+    },
+    [onlyDistance, totalPathDistance, elevationProfileRef, totalElevationGainRef, statsWidgetRef]
+  );
 
   const updateCamera = useCallback(
     (position: LngLatLike, altitude: number, target: LngLatLike) => {
@@ -183,32 +221,7 @@ export function useAnimation(
         map.queryTerrainElevation(smoothedTargetCoords, { exaggerated: true }) ?? 0;
 
       // Stats widget (direct DOM update — avoids React re-render on every frame)
-      if (statsWidgetRef.current) {
-        const elevProfile = elevationProfileRef.current;
-        statsWidgetRef.current.innerHTML = `
-          <div style="display:flex;flex-direction:column;gap:3px">
-            <div style="font-size:1rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Distancia</div>
-            <div style="font-size:2.2rem;font-weight:700;color:white">
-              ${(distanceAlongPath / 1000).toFixed(2)}
-              <span style="font-size:1.3rem;color:#888">/ ${(totalPathDistance / 1000).toFixed(2)} km</span>
-            </div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:3px">
-            <div style="font-size:1rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Altitud</div>
-            <div style="font-size:2.2rem;font-weight:700;color:white">
-              ${getElevationAtDistance(elevProfile, distanceAlongPath).toFixed(0)}
-              <span style="font-size:1.3rem;color:#888">m</span>
-            </div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:3px">
-            <div style="font-size:1rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Desnivel +</div>
-            <div style="font-size:2.2rem;font-weight:700;color:white">
-              ${totalElevationGainRef.current.toFixed(0)}
-              <span style="font-size:1.3rem;color:#888">m</span>
-            </div>
-          </div>
-        `;
-      }
+      updateStatsWidget(distanceAlongPath);
 
       // Camera logic — keyframes or eagle-view
       if (useKeyframes && keyframes.length > 1) {
@@ -332,9 +345,16 @@ export function useAnimation(
       mapRef, threeLayerRef, isPausedForPhotoRef,
       setPhotos, setActivePhoto, setSlideshowQueue, setCurrentSlideIndex,
       setIsAnimating, setStatusMessage, setIsMenuVisible, onRouteComplete,
-      statsWidgetRef, elevationProfileRef, totalElevationGainRef,
+      updateStatsWidget,
     ]
   );
+
+  // Keep stats widget synchronized when onlyDistance or route changes
+  useEffect(() => {
+    if (gpxFeature) {
+      updateStatsWidget(currentDistanceRef.current);
+    }
+  }, [gpxFeature, onlyDistance, updateStatsWidget]);
 
   // Keep animationStepRef fresh so the rAF loop always has the latest closure
   useEffect(() => {
@@ -425,8 +445,10 @@ export function useAnimation(
     totalPausedTimeRef.current        = 0;
     pauseStartTimeRef.current         = 0;
     isPausedForPhotoRef.current       = false;
+    currentDistanceRef.current        = 0;
     manualPauseWallTimeRef.current    = 0;
     smoothedBearingRef.current        = null;
+    updateStatsWidget(0);
     setStatusMessage("Animación reiniciada.");
 
     const map = mapRef.current;

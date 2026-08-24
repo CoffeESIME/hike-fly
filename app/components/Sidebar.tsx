@@ -52,6 +52,8 @@ type Props = {
   // Options
   hideMenuOnStart: boolean;
   setHideMenuOnStart: React.Dispatch<React.SetStateAction<boolean>>;
+  onlyDistance: boolean;
+  setOnlyDistance: React.Dispatch<React.SetStateAction<boolean>>;
   // Avatar
   avatarUrl: string | null;
   setAvatarUrl: React.Dispatch<React.SetStateAction<string | null>>;
@@ -77,6 +79,7 @@ export function Sidebar({
   activeKeyframeIndex, setActiveKeyframeIndex,
   handleCaptureKeyframe,
   hideMenuOnStart, setHideMenuOnStart,
+  onlyDistance, setOnlyDistance,
   avatarUrl, setAvatarUrl,
   customModelUrl, handleModelChange,
   modelType, handleModelTypeChange,
@@ -369,11 +372,15 @@ export function Sidebar({
             Pausa, mueve la cámara y captura para crear una ruta personalizada.
           </div>
 
-          {/* Hide-menu-on-start option */}
-          <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+          {/* Options: Hide menu on start & Only distance */}
+          <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", flexDirection: "column", gap: "10px" }}>
             <label style={{ fontSize: "0.8rem", color: "#ccc", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
               <input type="checkbox" checked={hideMenuOnStart} onChange={(e) => setHideMenuOnStart(e.target.checked)} />
               Ocultar menú al iniciar
+            </label>
+            <label style={{ fontSize: "0.8rem", color: "#ccc", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
+              <input type="checkbox" checked={onlyDistance} onChange={(e) => setOnlyDistance(e.target.checked)} />
+              Solo mostrar distancia (ocultar altitud y desnivel)
             </label>
           </div>
 

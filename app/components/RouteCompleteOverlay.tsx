@@ -6,6 +6,7 @@ type Props = {
   totalElevationGain: number;
   maxAltitude: number;
   minAltitude: number;
+  onlyDistance?: boolean;
   onClose: () => void;
 };
 
@@ -18,6 +19,7 @@ export function RouteCompleteOverlay({
   totalElevationGain,
   maxAltitude,
   minAltitude,
+  onlyDistance = false,
   onClose,
 }: Props) {
   const [visible, setVisible] = useState(false);
@@ -109,9 +111,11 @@ export function RouteCompleteOverlay({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: onlyDistance ? "1fr" : "1fr 1fr",
             gap: "16px",
             marginBottom: "36px",
+            maxWidth: onlyDistance ? "220px" : "100%",
+            margin: onlyDistance ? "0 auto 36px auto" : "0 0 36px 0",
           }}
         >
           <StatCard
@@ -122,30 +126,34 @@ export function RouteCompleteOverlay({
             visible={visible}
             delay="0.1s"
           />
-          <StatCard
-            icon="⛰️"
-            label="Desnivel +"
-            value={Math.round(totalElevationGain).toString()}
-            unit="m"
-            visible={visible}
-            delay="0.18s"
-          />
-          <StatCard
-            icon="🔺"
-            label="Altitud Máx"
-            value={Math.round(maxAltitude).toString()}
-            unit="m"
-            visible={visible}
-            delay="0.26s"
-          />
-          <StatCard
-            icon="🔻"
-            label="Altitud Mín"
-            value={Math.round(minAltitude).toString()}
-            unit="m"
-            visible={visible}
-            delay="0.34s"
-          />
+          {!onlyDistance && (
+            <>
+              <StatCard
+                icon="⛰️"
+                label="Desnivel +"
+                value={Math.round(totalElevationGain).toString()}
+                unit="m"
+                visible={visible}
+                delay="0.18s"
+              />
+              <StatCard
+                icon="🔺"
+                label="Altitud Máx"
+                value={Math.round(maxAltitude).toString()}
+                unit="m"
+                visible={visible}
+                delay="0.26s"
+              />
+              <StatCard
+                icon="🔻"
+                label="Altitud Mín"
+                value={Math.round(minAltitude).toString()}
+                unit="m"
+                visible={visible}
+                delay="0.34s"
+              />
+            </>
+          )}
         </div>
 
         {/* Close button */}

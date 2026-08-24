@@ -61,6 +61,7 @@ export default function Home() {
   // ---- UI ----------------------------------------------------------------
   const [isMenuVisible,   setIsMenuVisible]   = useState(true);
   const [hideMenuOnStart, setHideMenuOnStart] = useState(false);
+  const [onlyDistance,    setOnlyDistance]    = useState(false);
   const [avatarUrl,           setAvatarUrl]           = useState<string | null>(null);
   const [customModelUrl,      setCustomModelUrl]      = useState<string | null>(null);
   const [modelType,           setModelType]           = useState<"mixtli" | "corvid" | "custom">("corvid");
@@ -110,6 +111,7 @@ export default function Home() {
     keyframes, useKeyframes, setKeyframes, setUseKeyframes,
     cameraPitch, cameraAltitude, cameraRotation, animationDuration,
     hideMenuOnStart, setIsMenuVisible,
+    onlyDistance,
     () => setShowRouteComplete(true),
   ) as ReturnType<typeof useAnimation> & {
     setActiveKeyframeIndex: React.Dispatch<React.SetStateAction<number>>;
@@ -360,6 +362,8 @@ export default function Home() {
         handleCaptureKeyframe={handleCaptureKeyframe}
         hideMenuOnStart={hideMenuOnStart}
         setHideMenuOnStart={setHideMenuOnStart}
+        onlyDistance={onlyDistance}
+        setOnlyDistance={setOnlyDistance}
         avatarUrl={avatarUrl}
         setAvatarUrl={setAvatarUrl}
         customModelUrl={customModelUrl}
@@ -387,6 +391,7 @@ export default function Home() {
           totalElevationGain={totalElevationGainRef.current}
           maxAltitude={maxAltitude}
           minAltitude={minAltitude}
+          onlyDistance={onlyDistance}
           onClose={() => setShowRouteComplete(false)}
         />
       )}

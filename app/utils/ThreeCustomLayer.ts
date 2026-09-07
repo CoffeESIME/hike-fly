@@ -71,12 +71,21 @@ export class ThreeCustomLayer implements mapboxgl.CustomLayerInterface {
                 }
                 this.model = gltf.scene;
 
-                // Fix materials
+                // Render both sides of thin surfaces (both bundled GLBs are
+                // single-sided). Keep texture alpha settings for custom models.
                 this.model.traverse((object) => {
                     if (object instanceof THREE.Mesh) {
-                        const material = object.material as THREE.MeshStandardMaterial;
-                        material.metalness = 0;
-                        material.roughness = 0.8;
+                        const materials = Array.isArray(object.material)
+                            ? object.material
+                            : [object.material];
+                        for (const material of materials) {
+                            material.side = THREE.DoubleSide;
+                            if (material instanceof THREE.MeshStandardMaterial) {
+                                material.metalness = 0;
+                                material.roughness = 0.8;
+                            }
+                            material.needsUpdate = true;
+                        }
                     }
                 });
 
@@ -118,10 +127,10 @@ export class ThreeCustomLayer implements mapboxgl.CustomLayerInterface {
          *   - Z: altitude (in Mercator units, positive up)
          *
          * Three.js uses Y-up. To reconcile:
-         *   1. Scale uniformly
-         *   2. Apply bearing rotation around Z axis (which is "up" in Mercator)
-         *   3. Rotate -90° around X to go from Three.js Y-up to Mapbox Z-up
-         *   4. Translate to the model's Mercator position
+         *   1. Rotate +90° around X to map Three.js Y-up to Z-up.
+         *   2. Scale to meters and reflect Y for Mercator's south-positive axis.
+         *   3. Rotate around vertical Z to face the camera, keeping the model upright.
+         *   4. Translate to the model's Mercator position.
          *
          * The final camera matrix is: mapboxMatrix * modelMatrix
          */
@@ -131,17 +140,31 @@ export class ThreeCustomLayer implements mapboxgl.CustomLayerInterface {
         // Translation
         const T = new THREE.Matrix4().makeTranslation(merc.x, merc.y, merc.z);
 
-        // Rotation: bearing around Z axis (Mercator "up"), then tilt X to match Z-up
-        const Rz = new THREE.Matrix4().makeRotationZ(-this.modelBearingRad); // bearing
+        // Use the actual camera position, including keyframes, manual orbit and
+        // the final overview. Route bearings must not turn the character away.
+        // Local +Z is the model's front; after S * Rx it points south (+Y).
+        const cameraPosition = this.map.getFreeCameraOptions().position;
+        if (cameraPosition) {
+            let dx = cameraPosition.x - merc.x;
+            dx -= Math.round(dx); // nearest world copy across the antimeridian
+            const dy = cameraPosition.y - merc.y;
+            if (Math.hypot(dx, dy) > 1e-12) {
+                this.modelBearingRad = Math.atan2(-dx, dy);
+            }
+            // Directly overhead there is no horizontal facing direction;
+            // preserve the last orientation instead of snapping to zero.
+        }
+        const Rz = new THREE.Matrix4().makeRotationZ(this.modelBearingRad);
         const Rx = new THREE.Matrix4().makeRotationX(Math.PI / 2); // Three Y-up → Mercator Z-up
 
-        // Uniform scale
-        const S = new THREE.Matrix4().makeScale(scale, scale, scale);
+        // Mercator and Three.js have opposite handedness. The reflection is
+        // necessary to preserve the mesh's front faces in the map projection.
+        const S = new THREE.Matrix4().makeScale(scale, -scale, scale);
 
-        // Compose: T * Rz * Rx * S
+        // Compose: T * Rz * S * Rx
         modelMatrix.multiplyMatrices(T, Rz);
-        modelMatrix.multiply(Rx);
         modelMatrix.multiply(S);
+        modelMatrix.multiply(Rx);
 
         // Combine with Mapbox's world-to-clip matrix
         const mapboxMatrix = new THREE.Matrix4().fromArray(matrix);
@@ -159,9 +182,8 @@ export class ThreeCustomLayer implements mapboxgl.CustomLayerInterface {
      * @param lng  Longitude
      * @param lat  Latitude
      * @param altitude  Terrain elevation in meters
-     * @param bearingDeg  Direction the model should face, in degrees (geographic bearing)
      */
-    updatePosition(lng: number, lat: number, altitude: number, bearingDeg: number) {
+    updatePosition(lng: number, lat: number, altitude: number) {
         const ALTITUDE_OFFSET = 35; // meters above terrain
 
         this.modelMercator = mapboxgl.MercatorCoordinate.fromLngLat(
@@ -169,7 +191,5 @@ export class ThreeCustomLayer implements mapboxgl.CustomLayerInterface {
             altitude + ALTITUDE_OFFSET
         );
 
-        // Convert geographic bearing to radians for the matrix rotation
-        this.modelBearingRad = bearingDeg * (Math.PI / 180);
     }
 }

@@ -9,7 +9,7 @@ import { lerp, lerpLngLat, computeCameraPosition, toggleMapInteractivity } from 
 import { getElevationAtDistance } from "../utils/gpxUtils";
 import { LERP_SMOOTHING_FACTOR, PHOTO_TRIGGER_DISTANCE_M } from "../constants/defaults";
 
-const { along, bearing: turfBearing, point: turfPoint } = turf;
+const { along } = turf;
 
 export type UseAnimationReturn = {
   isAnimating: boolean;
@@ -21,7 +21,6 @@ export type UseAnimationReturn = {
   totalPausedTimeRef: React.MutableRefObject<number>;
   pauseStartTimeRef: React.MutableRefObject<number>;
   manualPauseWallTimeRef: React.MutableRefObject<number>;
-  smoothedBearingRef: React.MutableRefObject<number | null>;
   previousSmoothedTargetRef: React.MutableRefObject<LngLatLike | null>;
   handleToggleAnimation: () => void;
   handleResetAnimation: () => void;
@@ -79,7 +78,6 @@ export function useAnimation(
   const totalPausedTimeRef        = useRef<number>(0);
   const manualPauseWallTimeRef    = useRef<number>(0);
   const currentDistanceRef        = useRef<number>(0);
-  const smoothedBearingRef        = useRef<number | null>(null);
   const previousSmoothedTargetRef = useRef<LngLatLike | null>(null);
 
   // Always-fresh ref to the animationStep closure (avoids stale-closure bugs in rAF)
@@ -273,27 +271,11 @@ export function useAnimation(
       // 3D model position
       if (threeLayerRef.current) {
         const tCoords       = LngLat.convert(smoothedTargetCoords);
-        const lookAheadDist = Math.min(distanceAlongPath + 30, totalPathDistance - 1);
-        const nextStep      = along(gpxFeature, lookAheadDist, { units: "meters" });
-        const nextCoords    = nextStep.geometry.coordinates;
-        const rawBearing    = turfBearing(
-          turfPoint([tCoords.lng, tCoords.lat]),
-          turfPoint(nextCoords)
-        );
-
-        if (smoothedBearingRef.current === null) {
-          smoothedBearingRef.current = rawBearing;
-        } else {
-          let delta = rawBearing - smoothedBearingRef.current;
-          if (delta > 180) delta -= 360;
-          if (delta < -180) delta += 360;
-          smoothedBearingRef.current = smoothedBearingRef.current + delta * 0.08;
-        }
 
         const modelElevation =
           map.queryTerrainElevation(smoothedTargetCoords, { exaggerated: true }) ?? targetElevation;
 
-        threeLayerRef.current.updatePosition(tCoords.lng, tCoords.lat, modelElevation, smoothedBearingRef.current);
+        threeLayerRef.current.updatePosition(tCoords.lng, tCoords.lat, modelElevation);
       }
 
       // Continue or finish
@@ -389,7 +371,6 @@ export function useAnimation(
         totalPausedTimeRef.current     = 0;
         pauseStartTimeRef.current      = 0;
         isPausedForPhotoRef.current    = false;
-        smoothedBearingRef.current     = null;
         manualPauseWallTimeRef.current = 0;
         setPhotos((prev) => prev.map((p) => ({ ...p, shown: false })));
       }
@@ -447,7 +428,6 @@ export function useAnimation(
     isPausedForPhotoRef.current       = false;
     currentDistanceRef.current        = 0;
     manualPauseWallTimeRef.current    = 0;
-    smoothedBearingRef.current        = null;
     updateStatsWidget(0);
     setStatusMessage("Animación reiniciada.");
 
@@ -504,7 +484,6 @@ export function useAnimation(
     totalPausedTimeRef,
     pauseStartTimeRef,
     manualPauseWallTimeRef,
-    smoothedBearingRef,
     previousSmoothedTargetRef,
     handleToggleAnimation,
     handleResetAnimation,

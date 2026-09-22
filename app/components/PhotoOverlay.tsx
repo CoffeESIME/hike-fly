@@ -1,6 +1,7 @@
 "use client";
-import React from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { PhotoMarker } from "../types";
+import { getVideoClipDuration } from "../utils/videoClip";
 
 type Props = {
   photo: PhotoMarker;
@@ -19,6 +20,34 @@ type Props = {
  */
 export function PhotoOverlay({ photo, onClose, onAdvance }: Props) {
   const isVideo = photo.mediaType === "video";
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const advancedRef = useRef(false);
+  const clipDuration = getVideoClipDuration(photo.duration, photo.clipDuration);
+  const finishVideo = useCallback(() => {
+    if (advancedRef.current) return;
+    advancedRef.current = true;
+    videoRef.current?.pause();
+    (onAdvance ?? onClose)();
+  }, [onAdvance, onClose]);
+
+  const checkVideoLimit = useCallback(() => {
+    if (videoRef.current && videoRef.current.currentTime >= clipDuration) {
+      finishVideo();
+    }
+  }, [clipDuration, finishVideo]);
+
+  useEffect(() => {
+    if (!isVideo) return;
+    // Check media time, not elapsed wall time: pausing/buffering must not
+    // shorten the clip. timeupdate/seeking also enforce the bound offscreen.
+    let frame: number;
+    const checkFrame = () => {
+      checkVideoLimit();
+      if (!advancedRef.current) frame = requestAnimationFrame(checkFrame);
+    };
+    frame = requestAnimationFrame(checkFrame);
+    return () => cancelAnimationFrame(frame);
+  }, [isVideo, checkVideoLimit]);
 
   /* ── VIDEO layout ──────────────────────────────────────────────────────── */
   if (isVideo) {
@@ -104,11 +133,15 @@ export function PhotoOverlay({ photo, onClose, onAdvance }: Props) {
           onClick={(e) => e.stopPropagation()}
         >
           <video
-            src={photo.url}
+            ref={videoRef}
+            src={`${photo.url}#t=0,${clipDuration}`}
             autoPlay
             playsInline
             controls
-            onEnded={() => onAdvance && onAdvance()}
+            onTimeUpdate={checkVideoLimit}
+            onSeeking={checkVideoLimit}
+            onEnded={finishVideo}
+            onError={finishVideo}
             style={{
               width: "100%",
               height: "100%",
@@ -133,7 +166,7 @@ export function PhotoOverlay({ photo, onClose, onAdvance }: Props) {
             whiteSpace: "nowrap",
           }}
         >
-          Clic fuera del video para cerrar
+          Primeros {Number(clipDuration.toFixed(2))} s · Clic fuera del video para cerrar
         </div>
       </div>
     );
@@ -268,4 +301,3 @@ export function PhotoOverlay({ photo, onClose, onAdvance }: Props) {
     </div>
   );
 }
-

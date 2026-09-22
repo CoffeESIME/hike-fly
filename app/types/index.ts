@@ -9,7 +9,8 @@ export type PhotoMarker = {
   shown: boolean;   // Whether it has already been shown in the current animation run
   enabled: boolean; // Whether it is visible/active (user can toggle)
   mediaType: "image" | "video";
-  duration?: number; // Video duration in seconds
+  duration?: number; // Original video duration in seconds
+  clipDuration?: number; // Use only [0, clipDuration], up to 10 seconds
 };
 
 // A user-placed camera keyframe captured mid-animation
@@ -31,5 +32,20 @@ export type CameraSettings = {
 // One point on the elevation profile derived from the GPX track
 export type ElevationPoint = {
   dist: number; // meters from start
-  ele: number;  // elevation in meters
+  ele: number | null;
+  gain: number;
+  loss: number;
+  elapsed: number | null;
+  coordinate: number[];
+};
+
+export type StatisticsSettings = {
+  elevationSource: "auto" | "manual";
+  manualGain: string;
+  liveElevation: boolean;
+  elevationThreshold: number;
+  durationSource: "auto" | "manual";
+  manualHours: string;
+  manualMinutes: string;
+  liveDuration: boolean;
 };

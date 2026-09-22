@@ -1,39 +1,16 @@
 "use client";
-import React from "react";
+import type React from "react";
+import type { StatItem } from "../utils/statistics";
+import { Icon } from "./Icon";
 
-type Props = {
-  /** Ref forwarded to the DOM node so the animation loop can update innerHTML directly. */
-  statsRef: React.RefObject<HTMLDivElement | null>;
-};
-
-/**
- * Floating stats widget rendered over the map (bottom-center).
- * Its content is updated via direct DOM manipulation (`statsRef.current.innerHTML`)
- * inside the animation loop to avoid triggering React re-renders on every frame.
- */
-export function StatsWidget({ statsRef }: Props) {
-  return (
-    <div
-      ref={statsRef}
-      style={{
-        position: "absolute",
-        bottom: "30px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        display: "flex",
-        gap: "44px",
-        background: "rgba(15, 15, 15, 0.88)",
-        backdropFilter: "blur(10px)",
-        padding: "20px 44px",
-        borderRadius: "20px",
-        border: "1px solid rgba(255, 255, 255, 0.12)",
-        boxShadow: "0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.06)",
-        zIndex: 10,
-        pointerEvents: "none",
-        fontFamily: "'Inter', sans-serif",
-        opacity: 1,
-        transition: "opacity 0.3s ease",
-      }}
-    />
-  );
+export function StatsWidget({ statsRef, items, hidden, menuOpen }: {
+  statsRef: React.RefObject<HTMLDivElement | null>; items: StatItem[]; hidden: boolean; menuOpen: boolean;
+}) {
+  return <div ref={statsRef} className={`live-stats${menuOpen ? " live-stats-menu-open" : ""}`} style={{ visibility: hidden ? "hidden" : "visible" }} aria-label="Estadísticas del recorrido">
+    {items.map(item => <div key={item.key} className="live-stat">
+      <span className="stat-label"><Icon name={item.icon} /> {item.label}</span>
+      <strong><span data-stat={item.key}>{item.value}</span> <small>{item.unit}</small></strong>
+      {item.detail && <span className="stat-detail">{item.detail}</span>}
+    </div>)}
+  </div>;
 }

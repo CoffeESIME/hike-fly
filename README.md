@@ -37,7 +37,7 @@ FlyBy Hiking es una aplicación web interactiva que permite a los usuarios carga
 - **Sobrevuelo Suave**: La cámara sigue el avance del recorrido con interpolación lineal (LERP), suavizando saltos y temblores de GPS con un factor de `0.1` (`LERP_SMOOTHING_FACTOR`).
 - **Rotación Orbital**: Durante la reproducción de 90 segundos por defecto (`DEFAULT_ANIMATION_DURATION`), la cámara realiza una rotación orbital de 280° (`DEFAULT_CAMERA_ROTATION`) para proporcionar perspectivas dinámicas del entorno.
 - **Cámara libre**: Configurada por defecto con una inclinación de 60° (`DEFAULT_CAMERA_PITCH`) y altitud constante de 800 metros sobre el terreno (`DEFAULT_CAMERA_ALTITUDE`).
-- **Vista Panorámica Final (Route Overview)**: Al completarse el recorrido, la cámara realiza una animación fluiva (`fitBounds`) para encuadrar la ruta completa en el mapa antes de mostrar las estadísticas finales.
+- **Resumen final**: Al completarse el recorrido se muestran solo las estadísticas, con iconos SVG y fondo liso. El dibujo 2D de la ruta se configura y descarga por separado desde el menú.
 
 ### 🎮 Modelo 3D de Personaje en Ruta
 - **Personaje Animado**: El modelo 3D `.glb` (`public/models/mixtli-model.glb` por defecto) recorre la ruta de senderismo.
@@ -61,8 +61,8 @@ FlyBy Hiking es una aplicación web interactiva que permite a los usuarios carga
 - **Diseño Premium**: El avatar se muestra como un círculo flotante ampliado de 140px en la esquina superior derecha con bordes pulidos en blanco y azul, sombra tridimensional y una animación de entrada de rebote suave (`avatarPop`).
 
 ### 📊 HUD, Resumen y Panel de Control Premium
-- **Widget de Estadísticas Ampliado**: Panel translúcido inferior (Glassmorphism) con padding y fuentes optimizadas para mostrar en tiempo real la distancia recorrida (km), la altitud actual (m) y la ganancia de elevación acumulada (m).
-- **Modal de Ruta Completada**: Al finalizar la simulación, aparece un elegante modal translúcido central que presenta los datos resumidos del GPX: Distancia Total (km), Desnivel acumulado (+ m), Altitud Máxima (m) y Altitud Mínima (m).
+- **Estadísticas durante el recorrido**: Distancia, altitud, desnivel y duración con iconos SVG. Los datos automáticos pueden avanzar con el GPX; los totales manuales permanecen fijos.
+- **Resumen final**: Estadísticas sobre fondo liso, sin mapa ni dibujo 3D. La tarjeta 2D se previsualiza y descarga en el menú.
 - **Auto-ocultar Interfaz**: El menú lateral y el botón de hamburguesa flotante se ocultan de forma automática mientras se muestra el modal de ruta completada para garantizar una visualización limpia y despejada.
 - **Ocultar Menú en Reproducción**: Opción para esconder el menú lateral automáticamente cuando la animación inicia.
 - **Botón Flotante de Acceso**: Botón flotante `☰ MOSTRAR MENÚ` que aparece en la parte superior izquierda cuando la interfaz está oculta para regresar a los controles en cualquier momento.
@@ -243,7 +243,7 @@ hike-fly/                             # Directorio raíz del repositorio
 La aplicación implementa un patrón desacoplado para mantener alto rendimiento a 60 FPS coordinando **React**, **Mapbox GL** y **Three.js**:
 - **Coordinador Raíz (`page.tsx`)**: Actúa como contenedor de estado principal, inicializando referencias cruzadas y pasando datos mínimos entre componentes.
 - **Separación de Lógica en Hooks (`hooks/`)**: La lógica de negocio está completamente separada de los componentes visuales. La carga de GPX, la inicialización del mapa y la orquestación del bucle se ejecutan de manera aislada en sus respectivos hooks.
-- **Rendimiento HUD a 60 FPS (`StatsWidget.tsx`)**: Para evitar retrabajos de renderizado en React durante la reproducción rápida, el bucle en `useAnimation.ts` modifica directamente la propiedad `innerHTML` del nodo del widget de estadísticas (`statsRef.current`) mediante referencias del DOM.
+- **Actualización del widget**: React mantiene la estructura y los iconos. El bucle actualiza solo el `textContent` de los valores que cambian; consulta el perfil con búsqueda binaria y reutiliza los totales precalculados.
 - **Sincronización WebGL 3D (`ThreeCustomLayer.ts`)**: La capa customizada de Mapbox actúa como un puente directo al contexto WebGL. En cada fotograma (`render`), convierte coordenadas geográficas (latitud/longitud/altitud) del personaje a la proyección espacial nativa de Mapbox y sincroniza la proyección de la cámara de Three.js.
 
 ---
@@ -261,3 +261,20 @@ En el directorio `mapbox-gpx-viewer` puedes ejecutar los siguientes scripts:
 
 ---
 Desarrollado con ❤️ para los amantes del senderismo y la montaña.
+## Estadísticas y tarjeta de ruta
+
+En el menú, **Estadísticas** permite elegir el origen y el comportamiento de los datos:
+
+- **Desnivel automático:** suma los ascensos de las elevaciones GPX, sin conectar segmentos separados ni convertir elevaciones ausentes en cero. El filtro vertical predeterminado de 3 m acumula cambios desde la última elevación aceptada y conserva el cambio restante al terminar cada segmento. Se puede elegir 5 m o desactivar el filtro. Es una estimación sensible a la calidad del GPS; no pretende reproducir los filtros de Strava.
+- **En vivo o fijo:** el modo automático interpola el ascenso acumulado a lo largo del perfil. Desactivar la casilla muestra el total fijo. Un desnivel introducido manualmente siempre permanece fijo, porque no contiene un perfil que permita ubicar cada ascenso.
+- **Duración:** se obtiene de los tiempos de los puntos GPX, si están completos, ordenados y tienen una duración positiva. Incluye pausas entre el primer y el último punto; no es tiempo en movimiento. Puede mostrarse según el avance por la ruta o como total. También se puede introducir un total fijo en horas y minutos, independiente de los segundos de animación.
+- **Otros datos:** distancia horizontal geodésica, descenso, altitudes mínima y máxima y velocidad media (incluye pausas). Los totales verticales requieren un perfil completo; los datos ausentes se muestran como “—”, no como cero. La velocidad requiere una duración válida.
+- **Segmentos:** se preservan los límites entre segmentos GPX para el cálculo, el dibujo y la animación. No se añade la distancia de los huecos sin registro. Si un GPX contiene tracks y rutas planificadas, se usan los tracks.
+
+**Tarjeta de ruta** ofrece una previsualización 2D sin mapa ni terreno. Se pueden editar el título, la paleta, los colores de trazo/texto/fondo, el grosor, el formato vertical o cuadrado y la transparencia. **Guardar PNG** exporta a 1440 × 1920 o 1440 × 1440; **Guardar SVG** genera un archivo vectorial editable. La tarjeta omite los datos ausentes y respeta “Solo mostrar distancia”. Los valores manuales se reinician al cargar otra ruta.
+
+Al finalizar la animación aparece únicamente el resumen de estadísticas sobre un fondo liso. La tarjeta 2D se previsualiza y descarga desde el menú, sin aparecer en ese cierre.
+
+Verificación: `npm test` comprueba ascensos/descensos, interpolación, segmentos, datos ausentes, tiempos inválidos, ruido vertical, valores manuales y rutas grandes. `npx tsc --noEmit` comprueba los tipos y `npm run build` genera la versión de producción (requiere descargar las fuentes configuradas en `next/font`).
+
+Referencia del formato: [GPX 1.1: elevación y tiempo opcionales por punto](https://www.topografix.com/gpx/1/1/).

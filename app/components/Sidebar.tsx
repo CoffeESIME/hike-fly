@@ -1,6 +1,8 @@
 "use client";
 import React, { useState } from "react";
 import { PhotoMarker, Keyframe } from "../types";
+import { Icon } from "./Icon";
+import { getVideoClipDuration } from "../utils/videoClip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -17,6 +19,7 @@ type SliderConfig = {
 };
 
 type Props = {
+  routeTools?: React.ReactNode;
   // Visibility
   isMenuVisible: boolean;
   setIsMenuVisible: React.Dispatch<React.SetStateAction<boolean>>;
@@ -68,6 +71,7 @@ type Props = {
 // Sidebar component
 // ---------------------------------------------------------------------------
 export function Sidebar({
+  routeTools,
   isMenuVisible, setIsMenuVisible,
   hideWhileRouteComplete = false,
   error, statusMessage, isLoading, isAnimating,
@@ -99,7 +103,7 @@ export function Sidebar({
           position: "absolute",
           top: "20px",
           left: "20px",
-          width: "320px",
+          width: "min(340px, calc(100vw - 40px))",
           maxHeight: "calc(100vh - 40px)",
           overflowY: "auto",
           background: "rgba(20, 20, 20, 0.95)",
@@ -116,7 +120,8 @@ export function Sidebar({
         {/* Title */}
         <h2 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 0 20px 0", fontSize: "1.5rem", fontWeight: "700" }}>
           <span style={{ background: "linear-gradient(45deg, #0070f3, #00c6ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>FlyBy 3D</span>
-          <button onClick={() => setShowInfo(true)} style={{ background: "transparent", border: "none", color: "#ccc", fontSize: "1.2rem", cursor: "pointer" }} title="Información">ℹ️</button>
+          <button onClick={() => setIsMenuVisible(false)} aria-label="Ocultar menú" style={{ background: "transparent", border: 0, color: "#ccc", cursor: "pointer", marginLeft: "auto", padding: "8px" }}><Icon name="close" /></button>
+          <button onClick={() => setShowInfo(true)} style={{ background: "transparent", border: "none", color: "#ccc", fontSize: "1.2rem", cursor: "pointer" }} title="Información"><Icon name="info" /></button>
         </h2>
 
         {/* Info Modal */}
@@ -146,13 +151,13 @@ export function Sidebar({
               </p>
               <ul style={{ fontSize: "0.85rem", color: "#aaa", paddingLeft: "20px", lineHeight: "1.6" }}>
                 <li><strong>Cargar ruta:</strong> Puedes subir tu propio archivo GPX o cargar una ruta de ejemplo.</li>
-                <li><strong>Puntos de interés:</strong> Añade fotos y videos (hasta 10s) en puntos específicos de la ruta.</li>
+                <li><strong>Puntos de interés:</strong> Añade fotos y videos en puntos específicos de la ruta. De cada video se usan los primeros 10 segundos; puedes reducir el fragmento hasta 1 segundo.</li>
                 <li><strong>Personalización:</strong> Cambia el modelo 3D (Mixtli, Corvid o el tuyo propio) y sube tu avatar.</li>
                 <li><strong>Cámara:</strong> Ajusta la altitud, inclinación, exageración de terreno y duración de la animación.</li>
                 <li><strong>Ocultar Menú:</strong> Activa &quot;Ocultar menú al iniciar&quot; en la configuración para tener una vista limpia durante el recorrido.</li>
               </ul>
               <div style={{ background: "rgba(255, 165, 0, 0.1)", borderLeft: "4px solid orange", padding: "10px", marginTop: "15px", fontSize: "0.85rem", color: "#ffd085" }}>
-                <strong>💡 Recomendación para grabar:</strong> La aplicación no cuenta con funcionalidad nativa para grabar el recorrido. Te sugerimos activar la opción de ocultar el menú y utilizar un software de grabación de pantalla (como OBS Studio o la herramienta integrada de tu sistema) para capturar la animación.
+                <strong><Icon name="info" /> Recomendación para grabar:</strong> La aplicación no cuenta con funcionalidad nativa para grabar el recorrido. Te sugerimos activar la opción de ocultar el menú y utilizar un software de grabación de pantalla (como OBS Studio o la herramienta integrada de tu sistema) para capturar la animación.
               </div>
               <div style={{ textAlign: "right", marginTop: "20px" }}>
                 <button onClick={() => setShowInfo(false)} style={{ background: "#0070f3", color: "white", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}>
@@ -189,7 +194,7 @@ export function Sidebar({
               disabled={isLoading || isAnimating}
               style={{ width: "100%", padding: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "6px", color: "#00c6ff", fontSize: "0.8rem", cursor: (isLoading || isAnimating) ? "not-allowed" : "pointer", fontWeight: "600", transition: "background 0.2s" }}
             >
-              🚀 Cargar ruta de ejemplo
+              <Icon name="route" /> Cargar ruta de ejemplo
             </button>
           </div>
 
@@ -207,7 +212,7 @@ export function Sidebar({
                   style={{ background: "rgba(255,68,68,0.15)", border: "1px solid rgba(255,68,68,0.4)", color: "#ff6666", borderRadius: "4px", padding: "3px 8px", fontSize: "0.7rem", cursor: "pointer" }}
                   title="Eliminar todos los puntos ya visitados"
                 >
-                  🗑️ Limpiar pasados
+                  <Icon name="trash" /> Limpiar pasados
                 </button>
               )}
             </div>
@@ -217,12 +222,15 @@ export function Sidebar({
               style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: gpxFeature ? "rgba(0,112,243,0.15)" : "rgba(255,255,255,0.05)", border: gpxFeature ? "1px dashed rgba(0,198,255,0.5)" : "1px dashed #444", borderRadius: "6px", cursor: gpxFeature ? "pointer" : "not-allowed", fontSize: "0.8rem", color: gpxFeature ? "#00c6ff" : "#555", marginBottom: "8px" }}
               title={gpxFeature ? `Añadir foto/video en km ${currentDistanceKm.toFixed(2)}` : "Carga una ruta primero"}
             >
-              <span style={{ fontSize: "1.1rem" }}>📷</span>
+              <span style={{ fontSize: "1.1rem" }}><Icon name="camera" /></span>
               <span>+ Media en posición actual</span>
               <input type="file" accept="image/*,video/*" style={{ display: "none" }} disabled={!gpxFeature} onChange={(e) => handleAddPhoto(e)} />
             </label>
 
             {/* Photo list */}
+            <p style={{ fontSize: "0.72rem", color: "#aaa", margin: "0 0 10px", lineHeight: 1.5 }}>
+              Puedes subir videos largos. Se usan solo los primeros 10 s y puedes ajustar la duración de cada fragmento.
+            </p>
             {photos.length > 0 && (
               <div style={{ maxHeight: "200px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "5px" }}>
                 {[...photos].sort((a, b) => a.distanceAlongPath - b.distanceAlongPath).map((photo) => {
@@ -232,7 +240,7 @@ export function Sidebar({
                     <div key={photo.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 8px", background: isPast ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.07)", border: isPast ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(0,198,255,0.2)", borderRadius: "6px", opacity: isPast ? 0.5 : 1, transition: "opacity 0.3s" }}>
                       {photo.mediaType === "video" ? (
                         <div style={{ width: "32px", height: "32px", background: "rgba(0,0,0,0.5)", borderRadius: "4px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", border: "1px solid rgba(255,255,255,0.1)" }} title="Video">
-                          🎥
+                          <Icon name="camera" />
                         </div>
                       ) : (
                         /* eslint-disable-next-line @next/next/no-img-element */
@@ -240,9 +248,29 @@ export function Sidebar({
                       )}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: "0.75rem", color: isPast ? "#555" : "#ccc", display: "flex", alignItems: "center", gap: "5px" }}>
-                          {isPast ? <span title="Ya visitado" style={{ fontSize: "0.65rem" }}>✅</span> : <span title="Próximo" style={{ fontSize: "0.65rem" }}>📍</span>}
+                          {isPast ? <span title="Ya visitado" style={{ fontSize: "0.65rem" }}><Icon name="check" /></span> : <span title="Próximo" style={{ fontSize: "0.65rem" }}><Icon name="pin" /></span>}
                           <span style={{ fontWeight: "600" }}>km {kmLabel}</span>
                         </div>
+                        {photo.mediaType === "video" && (
+                          <label style={{ display: "block", fontSize: "0.7rem", color: "#bbb", marginTop: "6px" }}>
+                            Primeros {Number(getVideoClipDuration(photo.duration, photo.clipDuration).toFixed(2))} s
+                            <input
+                              type="range"
+                              aria-label={`Duración del video en km ${kmLabel}`}
+                              min={Math.min(1, photo.duration ?? 1)}
+                              max={Math.min(10, photo.duration ?? 10)}
+                              step="any"
+                              disabled={(photo.duration ?? 10) <= 1}
+                              value={getVideoClipDuration(photo.duration, photo.clipDuration)}
+                              onChange={(e) => {
+                                const clipDuration = getVideoClipDuration(photo.duration, Number(e.target.value));
+                                setPhotos((prev) => prev.map((p) => p.id === photo.id ? { ...p, clipDuration } : p));
+                              }}
+                              style={{ display: "block", width: "100%", accentColor: "#00c6ff" }}
+                            />
+                            {(photo.duration ?? 0) > 10 && <span>Máximo 10 s del video original.</span>}
+                          </label>
+                        )}
                       </div>
                       <input type="checkbox" checked={photo.enabled} onChange={(e) => setPhotos((prev) => prev.map((p) => p.id === photo.id ? { ...p, enabled: e.target.checked } : p))} title="Activar/Desactivar punto" style={{ cursor: "pointer" }} />
                       <button onClick={() => setPhotos((prev) => prev.filter((p) => p.id !== photo.id))} style={{ background: "none", border: "none", color: "#ff4444", cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: "2px" }} title="Eliminar punto">×</button>
@@ -257,6 +285,8 @@ export function Sidebar({
         {/* ---------------------------------------------------------------- */}
         {/* Playback buttons                                                  */}
         {/* ---------------------------------------------------------------- */}
+        {routeTools}
+
         <div style={{ marginTop: "25px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
           <button
             onClick={handleToggleAnimation}
@@ -279,7 +309,7 @@ export function Sidebar({
         {/* ---------------------------------------------------------------- */}
         <div style={{ marginTop: "20px", paddingTop: "15px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
           <div style={{ fontSize: "0.7rem", color: "#888", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "12px" }}>
-            ⚙️ Configuración de Vista
+            <Icon name="settings" /> Configuración de Vista
           </div>
           {sliders.map((s) => (
             <div key={s.label} style={{ marginBottom: "12px" }} title={s.tip}>
@@ -289,7 +319,7 @@ export function Sidebar({
                   {s.value.toFixed(s.step < 1 ? 1 : 0)}{s.unit}
                 </span>
               </div>
-              <input type="range" min={s.min} max={s.max} step={s.step} value={s.value} onChange={(e) => s.onChange(Number(e.target.value))} style={{ width: "100%", accentColor: "#00c6ff", cursor: "pointer" }} />
+              <input type="range" aria-label={s.label} min={s.min} max={s.max} step={s.step} value={s.value} onChange={(e) => s.onChange(Number(e.target.value))} style={{ width: "100%", accentColor: "#00c6ff", cursor: "pointer" }} />
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.62rem", color: "#444", marginTop: "1px" }}>
                 <span>{s.min}{s.unit}</span>
                 <span>{s.max}{s.unit}</span>
@@ -317,7 +347,7 @@ export function Sidebar({
             disabled={isAnimating || !gpxFeature}
             style={{ width: "100%", padding: "9px 0", background: (isAnimating || !gpxFeature) ? "rgba(255,255,255,0.04)" : "rgba(0,198,255,0.12)", color: (isAnimating || !gpxFeature) ? "#555" : "#00c6ff", border: `1px solid ${(isAnimating || !gpxFeature) ? "rgba(255,255,255,0.1)" : "rgba(0,198,255,0.45)"}`, borderRadius: "8px", fontSize: "0.78rem", fontWeight: "700", cursor: (isAnimating || !gpxFeature) ? "not-allowed" : "pointer", letterSpacing: "0.03em", transition: "background 0.2s, border-color 0.2s", marginBottom: "8px" }}
           >
-            📷 Capturar Vista
+            <Icon name="camera" /> Capturar Vista
           </button>
 
           {/* Keyframe list */}
@@ -332,7 +362,7 @@ export function Sidebar({
                       {idx + 1}
                     </span>
                     <span style={{ flex: 1, fontSize: "0.75rem", color: isActive ? "#00c6ff" : "#bbb", fontWeight: isActive ? "700" : "400", transition: "color 0.3s" }}>
-                      📍 km {kmPos}
+                      <Icon name="pin" /> km {kmPos}
                     </span>
                     {isActive && (
                       <span style={{ fontSize: "0.6rem", color: "#00c6ff", fontWeight: "700", background: "rgba(0,198,255,0.15)", padding: "1px 5px", borderRadius: "4px", letterSpacing: "0.05em", flexShrink: 0 }}>
@@ -364,7 +394,7 @@ export function Sidebar({
               style={{ width: "100%", padding: "7px 0", background: "rgba(255,68,68,0.08)", color: "#ff7070", border: "1px solid rgba(255,68,68,0.35)", borderRadius: "8px", fontSize: "0.75rem", fontWeight: "700", cursor: "pointer", letterSpacing: "0.03em", marginBottom: "8px" }}
               title="Eliminar todos los keyframes capturados"
             >
-              🗑️ Limpiar todos los frames
+              <Icon name="trash" /> Limpiar todos los frames
             </button>
           )}
 
@@ -380,7 +410,7 @@ export function Sidebar({
             </label>
             <label style={{ fontSize: "0.8rem", color: "#ccc", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
               <input type="checkbox" checked={onlyDistance} onChange={(e) => setOnlyDistance(e.target.checked)} />
-              Solo mostrar distancia (ocultar altitud y desnivel)
+              Solo mostrar distancia (animación y tarjeta)
             </label>
           </div>
 
@@ -394,7 +424,7 @@ export function Sidebar({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={avatarUrl} alt="avatar preview" style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover", border: "2px solid rgba(0,198,255,0.6)", flexShrink: 0 }} />
               ) : (
-                <span style={{ fontSize: "1.5rem" }}>👤</span>
+                <span style={{ fontSize: "1.5rem" }}><Icon name="user" /></span>
               )}
               <span>{avatarUrl ? "Cambiar avatar" : "Subir foto de perfil"}</span>
               <input
@@ -442,7 +472,7 @@ export function Sidebar({
 
             {modelType === "custom" && (
               <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px", background: "rgba(255,255,255,0.05)", border: "1px dashed rgba(255,255,255,0.2)", borderRadius: "8px", cursor: "pointer", fontSize: "0.8rem", color: "#ccc" }}>
-                <span style={{ fontSize: "1.5rem" }}>🧊</span>
+                <span style={{ fontSize: "1.5rem" }}><Icon name="cube" /></span>
                 <span>{customModelUrl ? "Cambiar modelo 3D (.glb, .gltf)" : "Subir modelo 3D (.glb, .gltf)"}</span>
                 <input
                   type="file"

@@ -1,124 +1,128 @@
-import * as GeoJSON from "geojson";
-import * as turf from "@turf/turf";
-import { ElevationPoint } from "../types";
+import type * as GeoJSON from "geojson";
+import { distance, point, along, lineString } from "@turf/turf";
+import type { ElevationPoint } from "../types";
 
-const { lineString, length: turfLength } = turf;
+export type RouteFeature = GeoJSON.Feature<GeoJSON.LineString, {
+  name: string; segmentStarts: number[]; times: (string | null)[];
+}>;
 
-// ---------------------------------------------------------------------------
-// GPX feature extraction
-// ---------------------------------------------------------------------------
+/** Read timestamps without compacting missing entries, which loses point alignment. */
+export function readGpx(doc: Document): GeoJSON.FeatureCollection {
+  if (doc.getElementsByTagName("parsererror").length || doc.documentElement.localName !== "gpx") {
+    throw new Error("El archivo no contiene un GPX válido.");
+  }
+  const children = (el: Element, name: string) => Array.from(el.children).filter(c => c.localName === name);
+  const value = (el: Element, name: string) => children(el, name)[0]?.textContent?.trim() || null;
+  const tracks = Array.from(doc.getElementsByTagNameNS("*", "trk"));
+  const routes = Array.from(doc.getElementsByTagNameNS("*", "rte"));
+  const features: GeoJSON.Feature[] = [];
+  // Prefer recorded tracks over planned routes when both are supplied.
+  for (const container of tracks.length ? tracks : routes) {
+    for (const segment of container.localName === "trk" ? children(container, "trkseg") : [container]) {
+      const nodes = children(segment, container.localName === "trk" ? "trkpt" : "rtept");
+      if (nodes.length < 2) continue;
+      const coordinates = nodes.map(node => {
+        const lon = node.getAttribute("lon"), lat = node.getAttribute("lat");
+        if (!lon?.trim() || !lat?.trim()) throw new Error("Un punto GPX no tiene coordenadas.");
+        const c = [Number(lon), Number(lat)];
+        const ele = value(node, "ele");
+        if (ele !== null && Number.isFinite(Number(ele))) c.push(Number(ele));
+        return c;
+      });
+      features.push(lineString(coordinates, {
+        name: value(container, "name") || "Mi recorrido",
+        coordinateProperties: { times: nodes.map(node => value(node, "time")) },
+      }));
+    }
+  }
+  return { type: "FeatureCollection", features };
+}
 
-/**
- * Extracts and merges all LineString / MultiLineString segments from a
- * GeoJSON FeatureCollection (as produced by @tmcw/togeojson).
- *
- * Returns the merged LineString feature, or throws if no valid geometry is found.
- */
-export function parseGpxFeatureCollection(
-  data: GeoJSON.FeatureCollection
-): GeoJSON.Feature<GeoJSON.LineString> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let lineFeature: any = null;
-  const mergedCoords: GeoJSON.Position[] = [];
-
-  data.features.forEach((feature) => {
-    if (feature.geometry.type === "LineString") {
-      if (!lineFeature) {
-        lineFeature = feature as GeoJSON.Feature<GeoJSON.LineString>;
+/** Preserve boundaries: gaps must not become distance or vertical gain. */
+export function parseGpxFeatureCollection(data: GeoJSON.FeatureCollection): RouteFeature {
+  const coordinates: GeoJSON.Position[] = [], segmentStarts: number[] = [], times: (string | null)[] = [];
+  let name = "Mi recorrido";
+  for (const f of data.features) {
+    if (!f.geometry || !["LineString", "MultiLineString"].includes(f.geometry.type)) continue;
+    const lines = f.geometry.type === "LineString" ? [f.geometry.coordinates] : (f.geometry as GeoJSON.MultiLineString).coordinates;
+    const rawTimes = f.properties?.coordinateProperties?.times ?? f.properties?.coordTimes;
+    for (const [s, line] of lines.entries()) {
+      if (line.length < 2) continue;
+      if (line.some(c => !Number.isFinite(c[0]) || !Number.isFinite(c[1]) || Math.abs(c[0]) > 180 || Math.abs(c[1]) > 90)) {
+        throw new Error("La ruta contiene coordenadas fuera de rango.");
       }
-      mergedCoords.push(...(feature.geometry as GeoJSON.LineString).coordinates);
-    } else if (feature.geometry.type === "MultiLineString") {
-      (feature.geometry as GeoJSON.MultiLineString).coordinates.forEach((line) => {
-        mergedCoords.push(...line);
+      if (!coordinates.length && typeof f.properties?.name === "string") name = f.properties.name;
+      segmentStarts.push(coordinates.length);
+      const ts = f.geometry.type === "LineString" ? rawTimes : rawTimes?.[s];
+      const aligned = Array.isArray(ts) && ts.length === line.length;
+      line.forEach((c, i) => {
+        coordinates.push(c.slice(0, 3));
+        times.push(aligned && typeof ts[i] === "string" ? ts[i] : null);
       });
     }
+  }
+  if (coordinates.length < 2) throw new Error("No se encontró una ruta con al menos dos puntos.");
+  return lineString(coordinates, { name, segmentStarts, times }) as RouteFeature;
+}
+
+export function routeSegments(route: RouteFeature): GeoJSON.Position[][] {
+  return route.properties.segmentStarts.map((start, i, starts) => route.geometry.coordinates.slice(start, starts[i + 1]));
+}
+
+export function buildElevationProfile(route: RouteFeature, threshold = 3): ElevationPoint[] {
+  const starts = new Set(route.properties.segmentStarts);
+  let dist = 0, gain = 0, loss = 0, anchor: number | null = null;
+  const times = route.properties.times.map(t => t === null ? NaN : Date.parse(t));
+  const validTimes = times.length > 1 && times.every((t, i) => Number.isFinite(t) && (i === 0 || t >= times[i - 1])) && times[times.length - 1] > times[0];
+  return route.geometry.coordinates.map((c, i, coords) => {
+    const ele = Number.isFinite(c[2]) ? c[2] : null;
+    if (i > 0 && !starts.has(i)) dist += distance(point(coords[i - 1]), point(c), { units: "meters" });
+    if (starts.has(i) || ele === null || anchor === null) anchor = ele;
+    else {
+      const delta = ele - anchor;
+      // Vertical deadband reduces GPS jitter; never crosses missing data or a segment.
+      if (Math.abs(delta) >= threshold || i === coords.length - 1 || starts.has(i + 1)) {
+        gain += Math.max(0, delta); loss += Math.max(0, -delta); anchor = ele;
+      }
+    }
+    return { dist, ele, gain, loss, elapsed: validTimes ? (times[i] - times[0]) / 1000 : null, coordinate: c };
   });
-
-  if (!lineFeature && mergedCoords.length >= 2) {
-    lineFeature = lineString(mergedCoords);
-  } else if (lineFeature && mergedCoords.length > lineFeature.geometry.coordinates.length) {
-    lineFeature = lineString(mergedCoords);
-  }
-
-  if (!lineFeature || lineFeature.geometry.coordinates.length < 2) {
-    throw new Error("No se encontró una LineString válida con al menos 2 puntos.");
-  }
-
-  return lineFeature;
 }
 
-// ---------------------------------------------------------------------------
-// Elevation helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Calculates total positive elevation gain (meters) from a LineString feature.
- * Requires the third coordinate element [lng, lat, elevation].
- */
-export function calculateElevationGain(
-  geojson: GeoJSON.Feature<GeoJSON.LineString>
-): number {
-  let gain = 0;
-  const coords = geojson.geometry.coordinates;
-  for (let i = 1; i < coords.length; i++) {
-    const diff = (coords[i][2] ?? 0) - (coords[i - 1][2] ?? 0);
-    if (diff > 0) gain += diff;
+/** Upper bound handles repeated coordinates and zero-distance boundaries. */
+export function profilePosition(profile: ElevationPoint[], target: number) {
+  let low = 0, high = profile.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (profile[mid].dist <= target) low = mid + 1; else high = mid;
   }
-  return gain;
+  const a = profile[Math.max(0, low - 1)], b = profile[Math.min(low, profile.length - 1)];
+  const t = a && b && b.dist > a.dist ? Math.max(0, Math.min(1, (target - a.dist) / (b.dist - a.dist))) : 0;
+  return { a, b, t };
 }
 
-/**
- * Builds a dense elevation profile array from a LineString feature.
- * Each entry has the cumulative distance (m) from the start and the elevation (m).
- */
-export function buildElevationProfile(
-  geojson: GeoJSON.Feature<GeoJSON.LineString>
-): ElevationPoint[] {
-  const coords = geojson.geometry.coordinates;
-  const profile: ElevationPoint[] = [];
-  let cumDist = 0;
-
-  for (let i = 0; i < coords.length; i++) {
-    if (i > 0) {
-      const segFeature = lineString([coords[i - 1], coords[i]]);
-      cumDist += turfLength(segFeature, { units: "meters" });
-    }
-    profile.push({ dist: cumDist, ele: coords[i][2] ?? 0 });
-  }
-
-  return profile;
+export function metricAtDistance(profile: ElevationPoint[], target: number, key: "ele" | "gain" | "loss" | "elapsed"): number | null {
+  const { a, b, t } = profilePosition(profile, target);
+  if (!a || !b) return null;
+  if (t === 0) return a[key];
+  const start = a[key], end = b[key];
+  return start === null || end === null ? null : start + (end - start) * t;
 }
 
-/**
- * Returns the interpolated elevation at the given distance along the profile.
- * Uses binary search for O(log n) performance.
- */
-export function getElevationAtDistance(
-  profile: ElevationPoint[],
-  targetDist: number
-): number {
-  if (profile.length === 0) return 0;
-  if (targetDist <= 0) return profile[0].ele;
-  if (targetDist >= profile[profile.length - 1].dist) return profile[profile.length - 1].ele;
+export function routePointAtDistance(profile: ElevationPoint[], target: number) {
+  const { a, b, t } = profilePosition(profile, target);
+  if (!a || !b) throw new Error("La ruta está vacía.");
+  return t === 0 ? point(a.coordinate) : along(lineString([a.coordinate, b.coordinate]), (b.dist - a.dist) * t, { units: "meters" });
+}
 
-  let low = 0;
-  let high = profile.length - 1;
-
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    if (profile[mid].dist < targetDist) {
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-
-  const p1 = profile[low - 1];
-  const p2 = profile[low];
-
-  if (!p1) return p2.ele;
-  if (!p2) return p1.ele;
-
-  const t = (targetDist - p1.dist) / (p2.dist - p1.dist);
-  return p1.ele + (p2.ele - p1.ele) * t;
+export function summarizeProfile(profile: ElevationPoint[]) {
+  const completeElevation = profile.length > 1 && profile.every(p => p.ele !== null);
+  const last = profile[profile.length - 1];
+  let min: number | null = null, max: number | null = null;
+  for (const p of profile) if (p.ele !== null) { min = min === null ? p.ele : Math.min(min, p.ele); max = max === null ? p.ele : Math.max(max, p.ele); }
+  return {
+    distance: last?.dist ?? 0, gain: completeElevation ? last.gain : null,
+    loss: completeElevation ? last.loss : null, duration: last?.elapsed ?? null,
+    min: completeElevation ? min : null, max: completeElevation ? max : null,
+  };
 }

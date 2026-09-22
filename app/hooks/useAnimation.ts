@@ -1,15 +1,15 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Map, LngLat, LngLatLike, MercatorCoordinate, LngLatBounds } from "mapbox-gl";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Map, LngLat, LngLatLike, MercatorCoordinate } from "mapbox-gl";
 import * as THREE from "three";
-import * as turf from "@turf/turf";
-import { PhotoMarker, Keyframe, ElevationPoint } from "../types";
+import { PhotoMarker, Keyframe, ElevationPoint, StatisticsSettings } from "../types";
 import { ThreeCustomLayer } from "../utils/ThreeCustomLayer";
 import { lerp, lerpLngLat, computeCameraPosition, toggleMapInteractivity } from "../utils/mapUtils";
-import { getElevationAtDistance } from "../utils/gpxUtils";
+import { routePointAtDistance, summarizeProfile } from "../utils/gpxUtils";
+import { statisticsAtDistance } from "../utils/statistics";
 import { LERP_SMOOTHING_FACTOR, PHOTO_TRIGGER_DISTANCE_M } from "../constants/defaults";
 
-const { along } = turf;
+
 
 export type UseAnimationReturn = {
   isAnimating: boolean;
@@ -41,7 +41,7 @@ export function useAnimation(
   totalPathDistance: number,
   startBearing: number,
   elevationProfileRef: React.MutableRefObject<ElevationPoint[]>,
-  totalElevationGainRef: React.MutableRefObject<number>,
+  statisticsSettings: StatisticsSettings,
   statsWidgetRef: React.MutableRefObject<HTMLDivElement | null>,
   // Photo slideshow (provided by useSlideshow)
   photos: PhotoMarker[],
@@ -83,42 +83,17 @@ export function useAnimation(
   // Always-fresh ref to the animationStep closure (avoids stale-closure bugs in rAF)
   const animationStepRef = useRef<(timestamp: number) => void>(() => { });
 
-  const updateStatsWidget = useCallback(
-    (distanceAlongPath: number) => {
-      if (!statsWidgetRef.current) return;
-      const elevProfile = elevationProfileRef.current;
-      const elevationHtml = !onlyDistance
-        ? `
-          <div style="display:flex;flex-direction:column;gap:3px">
-            <div style="font-size:1rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Altitud</div>
-            <div style="font-size:2.2rem;font-weight:700;color:white">
-              ${getElevationAtDistance(elevProfile, distanceAlongPath).toFixed(0)}
-              <span style="font-size:1.3rem;color:#888">m</span>
-            </div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:3px">
-            <div style="font-size:1rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Desnivel +</div>
-            <div style="font-size:2.2rem;font-weight:700;color:white">
-              ${totalElevationGainRef.current.toFixed(0)}
-              <span style="font-size:1.3rem;color:#888">m</span>
-            </div>
-          </div>
-        `
-        : "";
-
-      statsWidgetRef.current.innerHTML = `
-        <div style="display:flex;flex-direction:column;gap:3px">
-          <div style="font-size:1rem;color:#aaa;text-transform:uppercase;letter-spacing:1px">Distancia</div>
-          <div style="font-size:2.2rem;font-weight:700;color:white">
-            ${(distanceAlongPath / 1000).toFixed(2)}
-            <span style="font-size:1.3rem;color:#888">/ ${(totalPathDistance / 1000).toFixed(2)} km</span>
-          </div>
-        </div>
-        ${elevationHtml}
-      `;
-    },
-    [onlyDistance, totalPathDistance, elevationProfileRef, totalElevationGainRef, statsWidgetRef]
-  );
+  const profile = elevationProfileRef.current;
+  const summary = useMemo(() => summarizeProfile(profile), [profile]);
+  const updateStatsWidget = useCallback((distance: number) => {
+    const root = statsWidgetRef.current;
+    if (!root) return;
+    const items = statisticsAtDistance(profile, statisticsSettings, distance, false, summary);
+    for (const item of items) {
+      const node = root.querySelector('[data-stat="' + item.key + '"]');
+      if (node && node.textContent !== item.value) node.textContent = item.value;
+    }
+  }, [profile, statisticsSettings, statsWidgetRef, summary]);
 
   const updateCamera = useCallback(
     (position: LngLatLike, altitude: number, target: LngLatLike) => {
@@ -170,19 +145,23 @@ export function useAnimation(
       let animationPhase   = elapsedTime / (animationDuration * 1000);
       if (animationPhase >= 1.0) animationPhase = 1.0;
 
-      // Update route highlight gradient
+      // A separate layer per GPX segment avoids drawing unrecorded gaps.
       try {
-        map.setPaintProperty("route-layer", "line-gradient", [
-          "step", ["line-progress"],
-          "yellow", animationPhase, "rgba(0,0,0,0)",
-        ]);
-      } catch { /* layer may not be ready yet */ }
+        gpxFeature.properties.segmentStarts.forEach((start: number, i: number, starts: number[]) => {
+          const a = profile[start].dist;
+          const b = profile[(starts[i + 1] ?? profile.length) - 1].dist;
+          const progress = Math.max(0, Math.min(1, b > a ? (totalPathDistance * animationPhase - a) / (b - a) : 1));
+          map.setPaintProperty("route-segment-" + i, "line-gradient", [
+            "step", ["line-progress"], "yellow", progress, "rgba(0,0,0,0)",
+          ]);
+        });
+      } catch { /* route layers may not be ready */ }
 
       const distanceAlongPath = totalPathDistance * animationPhase;
       currentDistanceRef.current = distanceAlongPath;
 
       const safeDistance      = Math.max(0, Math.min(distanceAlongPath, totalPathDistance));
-      const exactTargetFeature = along(gpxFeature, safeDistance, { units: "meters" });
+      const exactTargetFeature = routePointAtDistance(elevationProfileRef.current, safeDistance);
       const exactTargetCoords  = exactTargetFeature.geometry.coordinates as LngLatLike;
 
       // Photo trigger check
@@ -280,44 +259,17 @@ export function useAnimation(
 
       // Continue or finish
       if (animationPhase < 1.0) {
-        animationFrameRef.current = requestAnimationFrame(animationStep);
+        animationFrameRef.current = requestAnimationFrame((ts) => animationStepRef.current(ts));
       } else {
         animationFrameRef.current         = null;
         animationStartTimeRef.current     = null;
         previousSmoothedTargetRef.current = null;
         setIsAnimating(false);
-        setStatusMessage("Vista general de la ruta...");
         toggleMapInteractivity(map, true);
 
-        // ── Route overview animation ──────────────────────────────────────────
-        // Build bounding box from all route coordinates
-        if (gpxFeature?.geometry?.coordinates?.length) {
-          const coords = gpxFeature.geometry.coordinates as [number, number][];
-          const bounds = coords.reduce(
-            (b, c) => b.extend(c as [number, number]),
-            new LngLatBounds(coords[0], coords[0])
-          );
-
-          // Zoom out to show the full route with a smooth flyTo
-          map.fitBounds(bounds, {
-            padding: { top: 80, bottom: 80, left: 80, right: 80 },
-            pitch: 35,
-            bearing: 0,
-            duration: 3500,
-            easing: (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t, // ease-in-out
-          });
-
-          // After overview animation settles, show the completion overlay
-          setTimeout(() => {
-            setStatusMessage("Animación completada.");
-            setIsMenuVisible(true);
-            onRouteComplete();
-          }, 3800);
-        } else {
-          setStatusMessage("Animación completada.");
-          setIsMenuVisible(true);
-          onRouteComplete();
-        }
+        setStatusMessage("Animación completada.");
+        setIsMenuVisible(true);
+        onRouteComplete();
       }
     },
     [
@@ -327,9 +279,18 @@ export function useAnimation(
       mapRef, threeLayerRef, isPausedForPhotoRef,
       setPhotos, setActivePhoto, setSlideshowQueue, setCurrentSlideIndex,
       setIsAnimating, setStatusMessage, setIsMenuVisible, onRouteComplete,
-      updateStatsWidget,
+      updateStatsWidget, profile, elevationProfileRef,
     ]
   );
+
+  useEffect(() => {
+    currentDistanceRef.current = 0;
+    animationStartTimeRef.current = null;
+    totalPausedTimeRef.current = 0;
+    pauseStartTimeRef.current = 0;
+    manualPauseWallTimeRef.current = 0;
+    previousSmoothedTargetRef.current = null;
+  }, [gpxFeature]);
 
   // Keep stats widget synchronized when onlyDistance or route changes
   useEffect(() => {
@@ -345,6 +306,7 @@ export function useAnimation(
 
   // Start / pause / stop the animation rAF loop
   useEffect(() => {
+    const currentMap = mapRef.current;
     isAnimatingRef.current = isAnimating;
 
     if (isAnimating) {
@@ -398,8 +360,7 @@ export function useAnimation(
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
-      const map = mapRef.current;
-      if (map) toggleMapInteractivity(map, true);
+      if (currentMap) toggleMapInteractivity(currentMap, true);
     };
   }, [isAnimating, gpxFeature, isTerrainReady, statusMessage]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -434,9 +395,9 @@ export function useAnimation(
     const map = mapRef.current;
     if (map) {
       try {
-        map.setPaintProperty("route-layer", "line-gradient", [
+        gpxFeature?.properties.segmentStarts.forEach((_: number, i: number) => map.setPaintProperty("route-segment-" + i, "line-gradient", [
           "step", ["line-progress"], "yellow", 0, "rgba(0,0,0,0)",
-        ]);
+        ]));
       } catch { /* ignore */ }
 
       if (gpxFeature?.geometry?.coordinates?.length) {

@@ -1,11 +1,9 @@
 "use client";
 import Head from "next/head";
-import React, { useState, useRef, ChangeEvent } from "react";
+import React, { useState, useRef, useMemo, ChangeEvent } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { gpx } from "@tmcw/togeojson";
 import * as GeoJSON from "geojson";
-import * as turf from "@turf/turf";
 
 // Types & constants
 import { PhotoMarker, Keyframe } from "./types";
@@ -27,9 +25,12 @@ import { StatsWidget }         from "./components/StatsWidget";
 import { RouteCompleteOverlay } from "./components/RouteCompleteOverlay";
 
 // Utilities
-import { buildElevationProfile, calculateElevationGain } from "./utils/gpxUtils";
+import { readGpx, routePointAtDistance } from "./utils/gpxUtils";
+import { DEFAULT_STATISTICS, statisticsAtDistance } from "./utils/statistics";
+import { StatisticsControls } from "./components/StatisticsControls";
+import { RouteCard } from "./components/RouteCard";
+import { getVideoClipDuration } from "./utils/videoClip";
 
-const { point: turfPoint, distance: turfDistance } = turf;
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 
@@ -68,6 +69,8 @@ export default function Home() {
   const [modelScale,          setModelScaleState]     = useState<number>(20);
   const [showRouteComplete,   setShowRouteComplete]   = useState(false);
 
+  const [statisticsSettings, setStatisticsSettings] = useState(DEFAULT_STATISTICS);
+
   // ---- Camera settings ---------------------------------------------------
   const {
     cameraPitch, setCameraPitch,
@@ -80,10 +83,10 @@ export default function Home() {
   // ---- GPX processor -----------------------------------------------------
   const {
     gpxFeature, totalPathDistance, startBearing,
-    totalElevationGainRef, elevationProfileRef,
+    elevationProfileRef, profile, summary,
   } = useGpxProcessor(
     gpxData, isMapLoaded, cameraPitch, mapRef, setStatusMessage,
-    (err) => setError(err)
+    setError, statisticsSettings.elevationThreshold
   );
 
   // ---- Slideshow ---------------------------------------------------------
@@ -105,7 +108,7 @@ export default function Home() {
     isTerrainReady, statusMessage, setStatusMessage,
     (err) => setError(err),
     gpxFeature, totalPathDistance, startBearing,
-    elevationProfileRef, totalElevationGainRef, statsWidgetRef,
+    elevationProfileRef, statisticsSettings, statsWidgetRef,
     photos, setPhotos,
     isPausedForPhotoRef, setActivePhoto, setSlideshowQueue, setCurrentSlideIndex,
     keyframes, useKeyframes, setKeyframes, setUseKeyframes,
@@ -133,20 +136,17 @@ export default function Home() {
     setKeyframes([]);
     setUseKeyframes(false);
     setShowRouteComplete(false);
+    setStatisticsSettings(DEFAULT_STATISTICS);
+    handleResetAnimation();
   };
 
   const loadGpxString = (gpxContent: string) => {
     try {
       const parser     = new DOMParser();
       const doc        = parser.parseFromString(gpxContent, "application/xml");
-      const geojsonData = gpx(doc);
+      const geojsonData = readGpx(doc);
       setGpxData(geojsonData);
 
-      if (geojsonData.features?.length > 0) {
-        const feature = geojsonData.features[0] as GeoJSON.Feature<GeoJSON.LineString>;
-        totalElevationGainRef.current = calculateElevationGain(feature);
-        elevationProfileRef.current   = buildElevationProfile(feature);
-      }
 
       setStatusMessage("Archivo GPX leído. Procesando...");
     } catch (err) {
@@ -159,10 +159,9 @@ export default function Home() {
 
   // ---- handleFileChange --------------------------------------------------
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    resetGpxState();
-
     const file = event.target.files?.[0];
     if (!file) return;
+    resetGpxState();
 
     if (!file.name.toLowerCase().endsWith(".gpx")) {
       setError("Selecciona un archivo .gpx válido.");
@@ -212,7 +211,7 @@ export default function Home() {
     let coord: [number, number] = [0, 0];
     if (gpxFeature && totalPathDistance > 0) {
       try {
-        const pt = turf.along(gpxFeature, Math.max(0, Math.min(capturedDistance, totalPathDistance)), { units: "meters" });
+        const pt = routePointAtDistance(profile, Math.max(0, Math.min(capturedDistance, totalPathDistance)));
         coord = pt.geometry.coordinates as [number, number];
       } catch { /* fallback to [0,0] */ }
     }
@@ -220,26 +219,39 @@ export default function Home() {
     let duration: number | undefined;
     if (isVideo) {
       const video = document.createElement("video");
-      video.src = url;
       try {
         await new Promise<void>((resolve, reject) => {
+          const timeout = window.setTimeout(() => reject(new Error("No se pudo leer la duración del video.")), 15000);
           video.onloadedmetadata = () => {
+            window.clearTimeout(timeout);
             duration = video.duration;
-            resolve();
+            if (!Number.isFinite(duration) || duration <= 0) {
+              reject(new Error("El video no tiene una duración válida."));
+            } else {
+              resolve();
+            }
           };
           video.onerror = () => {
-            reject(new Error("Failed to load video metadata"));
+            window.clearTimeout(timeout);
+            reject(new Error("No se pudo abrir el video. Prueba con otro archivo."));
           };
+          video.preload = "metadata";
+          video.src = url;
         });
       } catch (err) {
-        console.error(err);
-      }
-
-      if (duration && duration > 10.5) {
-        alert("El video no debe exceder los 10 segundos.");
+        setError(err instanceof Error ? err.message : "No se pudo abrir el video.");
         URL.revokeObjectURL(url);
         event.target.value = "";
         return;
+      } finally {
+        video.onloadedmetadata = null;
+        video.onerror = null;
+        video.removeAttribute("src");
+        video.load();
+      }
+
+      if (duration !== undefined && duration > 10) {
+        alert("El video supera el límite de 10 segundos. Se usarán solo los primeros 10 segundos; puedes reducir el fragmento de 1 a 10 segundos en este punto de la ruta.");
       }
     }
 
@@ -253,7 +265,8 @@ export default function Home() {
         shown: false, 
         enabled: true,
         mediaType: isVideo ? "video" : "image",
-        duration
+        duration,
+        clipDuration: isVideo ? getVideoClipDuration(duration) : undefined,
       },
     ]);
     event.target.value = "";
@@ -321,12 +334,8 @@ export default function Home() {
     },
   ];
 
-  // Suppress unused-var warnings for turf helpers only imported for tree-shaking
-  void turfPoint; void turfDistance;
-
-  const elevations = elevationProfileRef.current.map((p) => p.ele);
-  const maxAltitude = elevations.length > 0 ? Math.max(...elevations) : 0;
-  const minAltitude = elevations.length > 0 ? Math.min(...elevations) : 0;
+  const liveItems = useMemo(() => statisticsAtDistance(profile, statisticsSettings, currentDistanceRef.current, false, summary).filter(item => !onlyDistance || item.key === "distance"), [profile, statisticsSettings, summary, onlyDistance, currentDistanceRef]);
+  const finalItems = useMemo(() => statisticsAtDistance(profile, statisticsSettings, summary.distance, true, summary).filter(item => !onlyDistance || item.key === "distance"), [profile, statisticsSettings, summary, onlyDistance]);
 
   // ---- Render ------------------------------------------------------------
   return (
@@ -335,6 +344,10 @@ export default function Home() {
 
       {/* Sidebar (controls panel) */}
       <Sidebar
+        routeTools={gpxFeature && <>
+          <StatisticsControls settings={statisticsSettings} onChange={setStatisticsSettings} summary={summary} />
+          <RouteCard route={gpxFeature} items={finalItems} />
+        </>}
         isMenuVisible={isMenuVisible}
         setIsMenuVisible={setIsMenuVisible}
         hideWhileRouteComplete={showRouteComplete}
@@ -376,22 +389,18 @@ export default function Home() {
       {avatarUrl && <AvatarBadge avatarUrl={avatarUrl} />}
 
       {/* Stats widget (bottom-center, shown when a route is loaded) */}
-      {gpxFeature && <StatsWidget statsRef={statsWidgetRef} />}
+      {gpxFeature && <StatsWidget statsRef={statsWidgetRef} items={liveItems} hidden={showRouteComplete} menuOpen={isMenuVisible} />}
 
       {/* Map canvas */}
       <div ref={mapContainerRef} style={{ flexGrow: 1, minHeight: 0 }} />
 
       {/* Photo slideshow overlay */}
-      {activePhoto && <PhotoOverlay photo={activePhoto} onClose={closePhotoOverlay} onAdvance={advanceSlideshow} />}
+      {activePhoto && <PhotoOverlay key={activePhoto.id} photo={activePhoto} onClose={closePhotoOverlay} onAdvance={advanceSlideshow} />}
 
       {/* Route complete overlay */}
       {showRouteComplete && (
         <RouteCompleteOverlay
-          totalDistanceKm={totalPathDistance / 1000}
-          totalElevationGain={totalElevationGainRef.current}
-          maxAltitude={maxAltitude}
-          minAltitude={minAltitude}
-          onlyDistance={onlyDistance}
+          items={finalItems}
           onClose={() => setShowRouteComplete(false)}
         />
       )}

@@ -101,3 +101,14 @@ test('invalid coordinates and routes with no usable geometry are rejected', () =
   assert.throws(() => route(line([[181,0],[0,0]])), /fuera de rango/);
   assert.throws(() => route(), /dos puntos/);
 });
+
+test('duration visibility applies to live statistics and final/export items without losing the recorded total', () => {
+  const profile = buildElevationProfile(route(line([[0,0,100], [.01,0,200]], [at(0), at(1)])), 0);
+  const hidden = { ...settings, showDuration: false };
+  for (const final of [false, true]) {
+    assert.equal(item(statisticsAtDistance(profile, hidden, 0, final), 'duration'), undefined);
+    assert.ok(item(statisticsAtDistance(profile, { ...hidden, showDuration: true }, 0, final), 'duration'));
+  }
+  assert.ok(item(statisticsAtDistance(profile, hidden, 0, true), 'speed'));
+  assert.equal(summarizeProfile(profile).duration, 3600);
+});

@@ -278,3 +278,11 @@ Al finalizar la animación aparece únicamente el resumen de estadísticas sobre
 Verificación: `npm test` comprueba ascensos/descensos, interpolación, segmentos, datos ausentes, tiempos inválidos, ruido vertical, valores manuales y rutas grandes. `npx tsc --noEmit` comprueba los tipos y `npm run build` genera la versión de producción (requiere descargar las fuentes configuradas en `next/font`).
 
 Referencia del formato: [GPX 1.1: elevación y tiempo opcionales por punto](https://www.topografix.com/gpx/1/1/).
+
+### Perfil de elevación durante la animación
+
+La opción **Estadísticas → Mostrar perfil de elevación** activa una franja semitransparente sobre el mapa. El gráfico usa las elevaciones originales del GPX y muestra la altitud y distancia en la posición actual. Se sincroniza con la reproducción, las pausas, el reinicio y la carga de otra ruta, sin un reloj independiente. Se oculta durante las fotos/videos y en el resumen final; en pantallas pequeñas también se oculta mientras el menú está abierto.
+
+Se requieren al menos dos puntos, elevación finita en todos ellos y distancias acumuladas ordenadas, con inicio en cero y recorrido total positivo. Si faltan datos, se omite el gráfico automáticamente y se explica el motivo en el menú. Un desnivel total manual no basta para generar el perfil; una ruta plana o con altitudes negativas sí es válida. Los segmentos se dibujan por separado y las rutas grandes se simplifican conservando mínimos y máximos. El marcador siempre consulta el perfil original.
+
+La opción **Estadísticas → Mostrar duración** oculta o muestra el tiempo en la animación, el resumen final y la tarjeta descargable, conservando los datos para poder volver a activarlo. La tarjeta de estadísticas tiene textos más grandes y comparte un bloque inferior con el perfil de elevación, situado justo encima con una separación de 12 px (10 px en móvil). El perfil aumenta aproximadamente un 15 % de ancho y altura, limitado al espacio disponible en pantalla.

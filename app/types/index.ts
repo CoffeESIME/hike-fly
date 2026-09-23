@@ -48,4 +48,5 @@ export type StatisticsSettings = {
   manualHours: string;
   manualMinutes: string;
   liveDuration: boolean;
+  showDuration: boolean;
 };

@@ -66,6 +66,7 @@ export function useAnimation(
   onlyDistance: boolean,
   // Route complete callback
   onRouteComplete: () => void,
+  elevationProgressRef: React.RefObject<((distance: number) => void) | null>,
 ): UseAnimationReturn {
   const [isAnimating,        setIsAnimating]        = useState(false);
   const [activeKeyframeIndex, setActiveKeyframeIndex] = useState(-1);
@@ -86,6 +87,7 @@ export function useAnimation(
   const profile = elevationProfileRef.current;
   const summary = useMemo(() => summarizeProfile(profile), [profile]);
   const updateStatsWidget = useCallback((distance: number) => {
+    elevationProgressRef.current?.(distance);
     const root = statsWidgetRef.current;
     if (!root) return;
     const items = statisticsAtDistance(profile, statisticsSettings, distance, false, summary);
@@ -93,7 +95,7 @@ export function useAnimation(
       const node = root.querySelector('[data-stat="' + item.key + '"]');
       if (node && node.textContent !== item.value) node.textContent = item.value;
     }
-  }, [profile, statisticsSettings, statsWidgetRef, summary]);
+  }, [profile, statisticsSettings, statsWidgetRef, summary, elevationProgressRef]);
 
   const updateCamera = useCallback(
     (position: LngLatLike, altitude: number, target: LngLatLike) => {

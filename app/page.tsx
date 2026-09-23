@@ -29,6 +29,8 @@ import { readGpx, routePointAtDistance } from "./utils/gpxUtils";
 import { DEFAULT_STATISTICS, statisticsAtDistance } from "./utils/statistics";
 import { StatisticsControls } from "./components/StatisticsControls";
 import { RouteCard } from "./components/RouteCard";
+import { ElevationProfile } from "./components/ElevationProfile";
+import { buildElevationChart, elevationChartAvailability } from "./utils/elevationChart";
 import { getVideoClipDuration } from "./utils/videoClip";
 
 
@@ -40,6 +42,8 @@ mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 export default function Home() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const statsWidgetRef  = useRef<HTMLDivElement | null>(null);
+  const elevationProgressRef = useRef<((distance: number) => void) | null>(null);
+  const [showElevationProfile, setShowElevationProfile] = useState(true);
 
   // ---- Map initialisation ------------------------------------------------
   const {
@@ -89,6 +93,9 @@ export default function Home() {
     setError, statisticsSettings.elevationThreshold
   );
 
+  const elevationChart = useMemo(() => gpxFeature ? buildElevationChart(profile, gpxFeature.properties.segmentStarts) : null, [profile, gpxFeature]);
+  const elevationUnavailableReason = useMemo(() => elevationChartAvailability(profile), [profile]);
+
   // ---- Slideshow ---------------------------------------------------------
   const {
     activePhoto, setActivePhoto,
@@ -116,6 +123,7 @@ export default function Home() {
     hideMenuOnStart, setIsMenuVisible,
     onlyDistance,
     () => setShowRouteComplete(true),
+    elevationProgressRef,
   ) as ReturnType<typeof useAnimation> & {
     setActiveKeyframeIndex: React.Dispatch<React.SetStateAction<number>>;
   };
@@ -345,7 +353,9 @@ export default function Home() {
       {/* Sidebar (controls panel) */}
       <Sidebar
         routeTools={gpxFeature && <>
-          <StatisticsControls settings={statisticsSettings} onChange={setStatisticsSettings} summary={summary} />
+          <StatisticsControls settings={statisticsSettings} onChange={setStatisticsSettings} summary={summary}
+            showElevationProfile={showElevationProfile} onShowElevationProfileChange={setShowElevationProfile}
+            elevationUnavailableReason={elevationUnavailableReason} />
           <RouteCard route={gpxFeature} items={finalItems} />
         </>}
         isMenuVisible={isMenuVisible}
@@ -388,8 +398,14 @@ export default function Home() {
       {/* Avatar badge (top-right) */}
       {avatarUrl && <AvatarBadge avatarUrl={avatarUrl} />}
 
-      {/* Stats widget (bottom-center, shown when a route is loaded) */}
-      {gpxFeature && <StatsWidget statsRef={statsWidgetRef} items={liveItems} hidden={showRouteComplete} menuOpen={isMenuVisible} />}
+      {gpxFeature && <div className={`route-hud${isMenuVisible ? " route-hud-menu-open" : ""}`}
+        style={{ visibility: showRouteComplete || activePhoto ? "hidden" : "visible" }}>
+        {showElevationProfile && elevationChart && !showRouteComplete && !activePhoto && (
+          <ElevationProfile profile={profile} chart={elevationChart} progressRef={elevationProgressRef}
+            distanceRef={currentDistanceRef} />
+        )}
+        <StatsWidget statsRef={statsWidgetRef} items={liveItems} />
+      </div>}
 
       {/* Map canvas */}
       <div ref={mapContainerRef} style={{ flexGrow: 1, minHeight: 0 }} />

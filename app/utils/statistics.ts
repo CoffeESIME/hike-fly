@@ -3,7 +3,7 @@ import { metricAtDistance, summarizeProfile } from "./gpxUtils";
 
 export const DEFAULT_STATISTICS: StatisticsSettings = {
   elevationSource: "auto", manualGain: "", liveElevation: true, elevationThreshold: 3,
-  durationSource: "auto", manualHours: "", manualMinutes: "", liveDuration: true,
+  durationSource: "auto", manualHours: "", manualMinutes: "", liveDuration: true, showDuration: true,
 };
 
 export function nonnegativeNumber(value: string): number | null {
@@ -50,5 +50,5 @@ export function statisticsAtDistance(
     );
     if (totalTime !== null && totalTime > 0) stats.push({ key: "speed", label: "Velocidad media", value: (summary.distance / 1000 / (totalTime / 3600)).toFixed(1), unit: "km/h", icon: "speed", detail: "Incluye pausas" });
   }
-  return stats;
+  return settings.showDuration ? stats : stats.filter(item => item.key !== "duration");
 }

@@ -4,12 +4,16 @@ import type { summarizeProfile } from "../utils/gpxUtils";
 import { formatDuration, manualDuration, nonnegativeNumber } from "../utils/statistics";
 import { Icon } from "./Icon";
 
-export function StatisticsControls({ settings, onChange, summary }: {
+export function StatisticsControls({ settings, onChange, summary, showElevationProfile, onShowElevationProfileChange, elevationUnavailableReason }: {
   settings: StatisticsSettings; onChange: (settings: StatisticsSettings) => void; summary: ReturnType<typeof summarizeProfile>;
+  showElevationProfile: boolean; onShowElevationProfileChange: (show: boolean) => void; elevationUnavailableReason: string | null;
 }) {
   const update = (patch: Partial<StatisticsSettings>) => onChange({ ...settings, ...patch });
   return <details className="settings-section" open>
     <summary><Icon name="settings" /> Estadísticas <span>DATOS DE LA RUTA</span></summary>
+    <label className="check-setting"><input type="checkbox" checked={showElevationProfile}
+      onChange={e => onShowElevationProfileChange(e.target.checked)} aria-describedby="elevation-profile-help" /> Mostrar perfil de elevación</label>
+    <p className="settings-help" id="elevation-profile-help">{elevationUnavailableReason || "Perfil semitransparente con la posición y altitud del recorrido. Se sincroniza con las pausas y los reinicios."} El desnivel manual no sustituye las elevaciones del GPX.</p>
     <label>Desnivel positivo<select value={settings.elevationSource} onChange={e => update({ elevationSource: e.target.value as "auto" | "manual" })}>
       <option value="auto">Calcular desde el GPX</option><option value="manual">Introducir total manual</option>
     </select></label>
@@ -24,6 +28,10 @@ export function StatisticsControls({ settings, onChange, summary }: {
       <label className="check-setting"><input type="checkbox" checked={settings.liveElevation} disabled={summary.gain === null} onChange={e => update({ liveElevation: e.target.checked })} /> Acumular desnivel durante la animación</label>
       {!settings.liveElevation && <p className="settings-help">Se mostrará el desnivel total fijo.</p>}
     </>}
+    <label className="check-setting"><input type="checkbox" checked={settings.showDuration}
+      onChange={e => update({ showDuration: e.target.checked })} /> Mostrar duración</label>
+    <p className="settings-help">{settings.showDuration ? "La duración se muestra en la animación, el resumen y la tarjeta descargable." : "Duración oculta en la animación, el resumen y la tarjeta descargable. Se conservan tus valores."}</p>
+    {settings.showDuration && <>
     <label>Duración de la actividad<select value={settings.durationSource} onChange={e => update({ durationSource: e.target.value as "auto" | "manual" })}>
       <option value="auto">Leer tiempos del GPX</option><option value="manual">Introducir horas y minutos</option>
     </select></label>
@@ -38,5 +46,6 @@ export function StatisticsControls({ settings, onChange, summary }: {
       <label className="check-setting"><input type="checkbox" checked={settings.liveDuration} disabled={summary.duration === null} onChange={e => update({ liveDuration: e.target.checked })} /> Mostrar tiempo transcurrido del GPX</label>
     </>}
     <p className="settings-help">La duración de la actividad es independiente de la duración de la animación. “—” indica que no hay datos suficientes.</p>
+    </>}
   </details>;
 }

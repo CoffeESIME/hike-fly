@@ -7,12 +7,14 @@ import { ThreeCustomLayer } from "../utils/ThreeCustomLayer";
 import { lerp, lerpLngLat, computeCameraPosition, toggleMapInteractivity } from "../utils/mapUtils";
 import { routePointAtDistance, summarizeProfile } from "../utils/gpxUtils";
 import { statisticsAtDistance } from "../utils/statistics";
+import { playRouteOverview } from "../utils/routeOverview";
 import { LERP_SMOOTHING_FACTOR, PHOTO_TRIGGER_DISTANCE_M } from "../constants/defaults";
 
 
 
 export type UseAnimationReturn = {
   isAnimating: boolean;
+  isOverview: boolean;
   setIsAnimating: React.Dispatch<React.SetStateAction<boolean>>;
   activeKeyframeIndex: number;
   currentDistanceRef: React.MutableRefObject<number>;
@@ -69,6 +71,15 @@ export function useAnimation(
   elevationProgressRef: React.RefObject<((distance: number) => void) | null>,
 ): UseAnimationReturn {
   const [isAnimating,        setIsAnimating]        = useState(false);
+  const [isOverview, setIsOverview] = useState(false);
+  const overviewActiveRef = useRef(false);
+  const overviewCancelRef = useRef<(() => void) | null>(null);
+  const cancelOverview = useCallback(() => {
+    overviewCancelRef.current?.();
+    overviewCancelRef.current = null;
+    overviewActiveRef.current = false;
+    setIsOverview(false);
+  }, []);
   const [activeKeyframeIndex, setActiveKeyframeIndex] = useState(-1);
 
   // Timing refs
@@ -266,12 +277,26 @@ export function useAnimation(
         animationFrameRef.current         = null;
         animationStartTimeRef.current     = null;
         previousSmoothedTargetRef.current = null;
+        isAnimatingRef.current = false;
+        overviewActiveRef.current = true;
+        setIsOverview(true);
         setIsAnimating(false);
-        toggleMapInteractivity(map, true);
-
-        setStatusMessage("Animación completada.");
-        setIsMenuVisible(true);
-        onRouteComplete();
+        setStatusMessage("Mostrando el recorrido completo...");
+        try {
+          overviewCancelRef.current = playRouteOverview(map, gpxFeature.geometry.coordinates, () => {
+            overviewActiveRef.current = false;
+            setIsOverview(false);
+            toggleMapInteractivity(map, true);
+            setStatusMessage("Animación completada.");
+            setIsMenuVisible(true);
+            onRouteComplete();
+          });
+        } catch (error) {
+          cancelOverview();
+          toggleMapInteractivity(map, true);
+          setIsMenuVisible(true);
+          setError("No se pudo encuadrar el recorrido completo: " + String(error));
+        }
       }
     },
     [
@@ -282,17 +307,23 @@ export function useAnimation(
       setPhotos, setActivePhoto, setSlideshowQueue, setCurrentSlideIndex,
       setIsAnimating, setStatusMessage, setIsMenuVisible, onRouteComplete,
       updateStatsWidget, profile, elevationProfileRef,
+      cancelOverview, setError,
     ]
   );
 
   useEffect(() => {
+    cancelOverview();
     currentDistanceRef.current = 0;
     animationStartTimeRef.current = null;
     totalPausedTimeRef.current = 0;
     pauseStartTimeRef.current = 0;
     manualPauseWallTimeRef.current = 0;
     previousSmoothedTargetRef.current = null;
-  }, [gpxFeature]);
+    return () => {
+      overviewCancelRef.current?.();
+      overviewActiveRef.current = false;
+    };
+  }, [gpxFeature, cancelOverview]);
 
   // Keep stats widget synchronized when onlyDistance or route changes
   useEffect(() => {
@@ -353,7 +384,7 @@ export function useAnimation(
       } else if (animationStartTimeRef.current !== null) {
         console.log(`[Pause re-run] NOT overwriting manualPauseWall (${manualPauseWallTimeRef.current.toFixed(0)})`);
       }
-      if (mapRef.current) toggleMapInteractivity(mapRef.current, true);
+      if (mapRef.current && !overviewActiveRef.current) toggleMapInteractivity(mapRef.current, true);
       if (statusMessage === "Animación en curso...") setStatusMessage("Animación pausada.");
     }
 
@@ -362,7 +393,7 @@ export function useAnimation(
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
-      if (currentMap) toggleMapInteractivity(currentMap, true);
+      if (currentMap && !overviewActiveRef.current) toggleMapInteractivity(currentMap, true);
     };
   }, [isAnimating, gpxFeature, isTerrainReady, statusMessage]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -373,6 +404,8 @@ export function useAnimation(
   const handleToggleAnimation = () => {
     if (!gpxFeature) { setError("Primero carga una ruta GPX."); return; }
     if (!isTerrainReady) { setError("Espera a que el terreno termine de cargar."); return; }
+    cancelOverview();
+    mapRef.current?.stop();
     setError(null);
     setIsAnimating((prev) => {
       const next = !prev;
@@ -382,6 +415,8 @@ export function useAnimation(
   };
 
   const handleResetAnimation = () => {
+    cancelOverview();
+    mapRef.current?.stop();
     setError(null);
     setIsAnimating(false);
     animationStartTimeRef.current     = null;
@@ -439,6 +474,7 @@ export function useAnimation(
 
   return {
     isAnimating,
+    isOverview,
     setIsAnimating,
     activeKeyframeIndex,
     currentDistanceRef,

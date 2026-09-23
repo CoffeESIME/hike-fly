@@ -273,7 +273,7 @@ En el menú, **Estadísticas** permite elegir el origen y el comportamiento de l
 
 **Tarjeta de ruta** ofrece una previsualización 2D sin mapa ni terreno. Se pueden editar el título, la paleta, los colores de trazo/texto/fondo, el grosor, el formato vertical o cuadrado y la transparencia. **Guardar PNG** exporta a 1440 × 1920 o 1440 × 1440; **Guardar SVG** genera un archivo vectorial editable. La tarjeta omite los datos ausentes y respeta “Solo mostrar distancia”. Los valores manuales se reinician al cargar otra ruta.
 
-Al finalizar la animación aparece únicamente el resumen de estadísticas sobre un fondo liso. La tarjeta 2D se previsualiza y descarga desde el menú, sin aparecer en ese cierre.
+Al finalizar el recorrido, la cámara se aleja durante 3,5 segundos para encuadrar la ruta completa. El resumen de estadísticas se abre cuando termina ese movimiento, en un modal semitransparente que conserva el mapa de fondo. Se cierra con «Volver al mapa», Escape o un clic fuera del panel. El menú y los datos en vivo se ocultan durante la panorámica y el resumen. La tarjeta 2D se previsualiza y descarga desde el menú, sin aparecer en ese cierre. La transición respeta la preferencia del sistema de reducir movimiento.
 
 Verificación: `npm test` comprueba ascensos/descensos, interpolación, segmentos, datos ausentes, tiempos inválidos, ruido vertical, valores manuales y rutas grandes. `npx tsc --noEmit` comprueba los tipos y `npm run build` genera la versión de producción (requiere descargar las fuentes configuradas en `next/font`).
 

@@ -106,7 +106,7 @@ export default function Home() {
 
   // ---- Animation ---------------------------------------------------------
   const {
-    isAnimating, setIsAnimating,
+    isAnimating, isOverview, setIsAnimating,
     activeKeyframeIndex, setActiveKeyframeIndex,
     currentDistanceRef,
     handleToggleAnimation, handleResetAnimation, handleCaptureKeyframe,
@@ -360,7 +360,7 @@ export default function Home() {
         </>}
         isMenuVisible={isMenuVisible}
         setIsMenuVisible={setIsMenuVisible}
-        hideWhileRouteComplete={showRouteComplete}
+        hideWhileRouteComplete={showRouteComplete || isOverview}
         error={displayError}
         statusMessage={statusMessage}
         isLoading={isLoading}
@@ -399,7 +399,7 @@ export default function Home() {
       {avatarUrl && <AvatarBadge avatarUrl={avatarUrl} />}
 
       {gpxFeature && <div className={`route-hud${isMenuVisible ? " route-hud-menu-open" : ""}`}
-        style={{ visibility: showRouteComplete || activePhoto ? "hidden" : "visible" }}>
+        style={{ visibility: showRouteComplete || isOverview || activePhoto ? "hidden" : "visible" }}>
         {showElevationProfile && elevationChart && !showRouteComplete && !activePhoto && (
           <ElevationProfile profile={profile} chart={elevationChart} progressRef={elevationProgressRef}
             distanceRef={currentDistanceRef} />

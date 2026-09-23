@@ -11,6 +11,7 @@ export function RouteCompleteOverlay({ items, onClose }: { items: StatItem[]; on
     return () => previous?.focus();
   }, []);
   return <section className="route-complete" role="dialog" aria-modal="true" aria-labelledby="complete-title"
+    onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     onKeyDown={e => { if (e.key === "Escape") onClose(); if (e.key === "Tab") { e.preventDefault(); buttonRef.current?.focus(); } }}>
     <div className="complete-content">
       <p className="eyebrow">FLYBY / RESUMEN DEL RECORRIDO</p>

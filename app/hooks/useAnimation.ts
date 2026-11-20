@@ -8,6 +8,7 @@ import { lerp, lerpLngLat, computeCameraPosition, toggleMapInteractivity } from 
 import { routePointAtDistance, summarizeProfile } from "../utils/gpxUtils";
 import { statisticsAtDistance } from "../utils/statistics";
 import { playRouteOverview } from "../utils/routeOverview";
+import { cameraPoseAtProgress, type CameraPreset } from "../utils/cameraPresets";
 import { LERP_SMOOTHING_FACTOR, PHOTO_TRIGGER_DISTANCE_M } from "../constants/defaults";
 
 
@@ -17,6 +18,7 @@ export type UseAnimationReturn = {
   isOverview: boolean;
   setIsAnimating: React.Dispatch<React.SetStateAction<boolean>>;
   activeKeyframeIndex: number;
+  setActiveKeyframeIndex: React.Dispatch<React.SetStateAction<number>>;
   currentDistanceRef: React.MutableRefObject<number>;
   animationStepRef: React.MutableRefObject<(timestamp: number) => void>;
   animationStartTimeRef: React.MutableRefObject<number | null>;
@@ -58,6 +60,7 @@ export function useAnimation(
   setKeyframes: React.Dispatch<React.SetStateAction<Keyframe[]>>,
   setUseKeyframes: React.Dispatch<React.SetStateAction<boolean>>,
   // Camera settings
+  cameraPreset: CameraPreset,
   cameraPitch: number,
   cameraAltitude: number,
   cameraRotation: number,
@@ -253,11 +256,9 @@ export function useAnimation(
         newCamera.orientation = [qA.x, qA.y, qA.z, qA.w];
         map.setFreeCameraOptions(newCamera);
       } else {
-        // Eagle-view mode
-        const camAlt        = targetElevation + cameraAltitude;
-        const currentBearing = startBearing - animationPhase * cameraRotation;
-        const cameraLngLat  = computeCameraPosition(cameraPitch, currentBearing, smoothedTargetCoords, cameraAltitude);
-        updateCamera(cameraLngLat, camAlt, smoothedTargetCoords);
+        const pose = cameraPoseAtProgress(cameraPreset, animationPhase, startBearing, cameraPitch, cameraAltitude, cameraRotation);
+        const cameraLngLat = computeCameraPosition(pose.pitch, pose.bearing, smoothedTargetCoords, pose.altitude);
+        updateCamera(cameraLngLat, targetElevation + pose.altitude, smoothedTargetCoords);
       }
 
       // 3D model position
@@ -302,7 +303,7 @@ export function useAnimation(
     [
       gpxFeature, totalPathDistance, animationDuration, startBearing,
       isTerrainReady, updateCamera, photos, keyframes, useKeyframes,
-      cameraPitch, cameraAltitude, cameraRotation,
+      cameraPreset, cameraPitch, cameraAltitude, cameraRotation,
       mapRef, threeLayerRef, isPausedForPhotoRef,
       setPhotos, setActivePhoto, setSlideshowQueue, setCurrentSlideIndex,
       setIsAnimating, setStatusMessage, setIsMenuVisible, onRouteComplete,
@@ -477,6 +478,7 @@ export function useAnimation(
     isOverview,
     setIsAnimating,
     activeKeyframeIndex,
+    setActiveKeyframeIndex,
     currentDistanceRef,
     animationStepRef,
     animationStartTimeRef,

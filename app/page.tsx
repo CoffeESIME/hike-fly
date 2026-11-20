@@ -32,6 +32,7 @@ import { RouteCard } from "./components/RouteCard";
 import { ElevationProfile } from "./components/ElevationProfile";
 import { buildElevationChart, elevationChartAvailability } from "./utils/elevationChart";
 import { getVideoClipDuration } from "./utils/videoClip";
+import type { CameraPreset } from "./utils/cameraPresets";
 
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
@@ -76,6 +77,7 @@ export default function Home() {
   const [statisticsSettings, setStatisticsSettings] = useState(DEFAULT_STATISTICS);
 
   // ---- Camera settings ---------------------------------------------------
+  const [cameraPreset, setCameraPreset] = useState<CameraPreset>("classic");
   const {
     cameraPitch, setCameraPitch,
     cameraAltitude, setCameraAltitude,
@@ -119,14 +121,12 @@ export default function Home() {
     photos, setPhotos,
     isPausedForPhotoRef, setActivePhoto, setSlideshowQueue, setCurrentSlideIndex,
     keyframes, useKeyframes, setKeyframes, setUseKeyframes,
-    cameraPitch, cameraAltitude, cameraRotation, animationDuration,
+    cameraPreset, cameraPitch, cameraAltitude, cameraRotation, animationDuration,
     hideMenuOnStart, setIsMenuVisible,
     onlyDistance,
     () => setShowRouteComplete(true),
     elevationProgressRef,
-  ) as ReturnType<typeof useAnimation> & {
-    setActiveKeyframeIndex: React.Dispatch<React.SetStateAction<number>>;
-  };
+  );
 
   // ---- Photo markers on map ----------------------------------------------
   usePhotoMarkers(photos, mapRef);
@@ -328,7 +328,9 @@ export default function Home() {
   const cameraSliders = [
     { label: "Altitud cámara", unit: "m", value: cameraAltitude, min: 50, max: 2000, step: 50, onChange: setCameraAltitude, tip: "Altura de la cámara sobre el terreno (metros)" },
     { label: "Inclinación cámara", unit: "°", value: cameraPitch, min: 0, max: 85, step: 5, onChange: setCameraPitch, tip: "0° = vista cenital, 85° = horizonte" },
-    { label: "Rotación orbital", unit: "°", value: cameraRotation, min: 0, max: 720, step: 10, onChange: setCameraRotation, tip: "Grados que rota la cámara durante todo el recorrido" },
+    ...(cameraPreset === "classic" && !useKeyframes ? [
+      { label: "Rotación orbital", unit: "°", value: cameraRotation, min: 0, max: 720, step: 10, onChange: setCameraRotation, tip: "Grados que rota la cámara durante todo el recorrido" },
+    ] : []),
     { label: "Duración animación", unit: "s", value: animationDuration, min: 15, max: 300, step: 5, onChange: setAnimationDuration, tip: "Duración total del recorrido animado" },
     {
       label: "Exageración terreno", unit: "x", value: terrainExaggeration, min: 0.5, max: 4, step: 0.1,
@@ -376,6 +378,8 @@ export default function Home() {
         handleToggleAnimation={handleToggleAnimation}
         handleResetAnimation={() => { setShowRouteComplete(false); handleResetAnimation(); }}
         sliders={cameraSliders}
+        cameraPreset={cameraPreset}
+        setCameraPreset={setCameraPreset}
         keyframes={keyframes}
         setKeyframes={setKeyframes}
         useKeyframes={useKeyframes}

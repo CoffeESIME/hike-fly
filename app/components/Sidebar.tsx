@@ -3,6 +3,14 @@ import React, { useState } from "react";
 import { PhotoMarker, Keyframe } from "../types";
 import { Icon } from "./Icon";
 import { getVideoClipDuration } from "../utils/videoClip";
+import type { CameraPreset } from "../utils/cameraPresets";
+
+const cameraDescriptions = {
+  classic: "La cámara sigue el recorrido con un giro orbital continuo.",
+  sweep: "La cámara gira hacia un lado, mantiene el ángulo y regresa suavemente.",
+  panorama: "La cámara se eleva y gira a mitad del recorrido. Al final vuelve a acercarse.",
+  keyframes: "La cámara recorre los ángulos que capturaste en la ruta.",
+};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +52,8 @@ type Props = {
   handleResetAnimation: () => void;
   // Camera sliders
   sliders: SliderConfig[];
+  cameraPreset: CameraPreset;
+  setCameraPreset: (preset: CameraPreset) => void;
   // Keyframes
   keyframes: Keyframe[];
   setKeyframes: React.Dispatch<React.SetStateAction<Keyframe[]>>;
@@ -78,7 +88,7 @@ export function Sidebar({
   gpxFeature, isTerrainReady, handleFileChange, handleLoadDefaultGpx,
   photos, setPhotos, currentDistanceKm, handleAddPhoto,
   handleToggleAnimation, handleResetAnimation,
-  sliders,
+  sliders, cameraPreset, setCameraPreset,
   keyframes, setKeyframes, useKeyframes, setUseKeyframes,
   activeKeyframeIndex, setActiveKeyframeIndex,
   handleCaptureKeyframe,
@@ -89,6 +99,7 @@ export function Sidebar({
   modelType, handleModelTypeChange,
 }: Props) {
   const [showInfo, setShowInfo] = useState(false);
+  const cameraMode = useKeyframes ? "keyframes" : cameraPreset;
 
   // The sidebar is suppressed while the route-complete modal is shown
   const panelVisible = isMenuVisible && !hideWhileRouteComplete;
@@ -287,6 +298,24 @@ export function Sidebar({
         {/* ---------------------------------------------------------------- */}
         {routeTools}
 
+        <div className="settings-section">
+          <label htmlFor="camera-mode">Cámara del recorrido</label>
+          <select id="camera-mode" value={cameraMode} aria-describedby="camera-mode-help"
+            onChange={(event) => {
+              const mode = event.target.value as CameraPreset | "keyframes";
+              setUseKeyframes(mode === "keyframes");
+              if (mode !== "keyframes") setCameraPreset(mode);
+            }}>
+            <option value="classic">Clásica (predeterminada)</option>
+            <option value="sweep">Barrido lateral</option>
+            <option value="panorama">Panorámica</option>
+            <option value="keyframes" disabled={keyframes.length < 2}>
+              {keyframes.length < 2 ? "Mis keyframes (requiere 2 vistas)" : `Mis keyframes (${keyframes.length} vistas)`}
+            </option>
+          </select>
+          <p className="settings-help" id="camera-mode-help">{cameraDescriptions[cameraMode]}</p>
+        </div>
+
         <div style={{ marginTop: "25px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
           <button
             onClick={handleToggleAnimation}
@@ -332,14 +361,9 @@ export function Sidebar({
         {/* Keyframe controls                                                 */}
         {/* ---------------------------------------------------------------- */}
         <div style={{ marginTop: "20px", paddingTop: "15px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-          {/* Enable checkbox */}
-          <label
-            style={{ fontSize: "0.82rem", color: keyframes.length < 2 ? "#555" : "#ccc", cursor: keyframes.length < 2 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}
-            title={keyframes.length < 2 ? "Captura al menos 2 vistas para habilitar keyframes" : "Usa vistas de cámara guardadas"}
-          >
-            <input type="checkbox" checked={useKeyframes} onChange={(e) => setUseKeyframes(e.target.checked)} disabled={keyframes.length < 2} style={{ cursor: keyframes.length < 2 ? "not-allowed" : "pointer" }} />
-            Usar Keyframes {keyframes.length < 2 ? "(Mín. 2)" : ""} ({keyframes.length})
-          </label>
+          <h3 style={{ fontSize: "0.82rem", color: "#ccc", marginBottom: "10px" }}>
+            Mis keyframes ({keyframes.length})
+          </h3>
 
           {/* Capture button */}
           <button
